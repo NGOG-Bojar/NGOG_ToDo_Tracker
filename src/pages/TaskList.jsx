@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useTask } from '../contexts/TaskContext';
+import { useProject } from '../contexts/ProjectContext';
 import TaskCard from '../components/TaskCard';
 import TaskModal from '../components/TaskModal';
 import TaskFilters from '../components/TaskFilters';
@@ -12,12 +13,22 @@ const { FiPlus } = FiIcons;
 function TaskList() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const { addTask, updateTask, deleteTask, toggleTaskStatus, getFilteredTasks } = useTask();
-
+  const { linkTaskToProject } = useProject();
+  
   const filteredTasks = getFilteredTasks();
 
   const handleCreateTask = (taskData) => {
-    addTask(taskData);
+    const newTask = addTask(taskData);
+    
+    // Explicitly handle project linking - this ensures the project's linkedTasks array is updated
+    if (newTask && taskData.linkedProject) {
+      linkTaskToProject(taskData.linkedProject, newTask.id, newTask.title);
+    }
+    
     setShowTaskModal(false);
+    
+    // Return the new task so the modal handler can use it
+    return newTask;
   };
 
   const handleUpdateTask = (id, updates) => {
@@ -54,11 +65,7 @@ function TaskList() {
       <div className="space-y-4">
         <AnimatePresence>
           {filteredTasks.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-12"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
               <p className="text-gray-500 text-lg">No tasks found</p>
               <p className="text-gray-400 text-sm mt-2">
                 Try adjusting your filters or create a new task
@@ -80,9 +87,7 @@ function TaskList() {
       </div>
 
       {/* Task Modal */}
-      {showTaskModal && (
-        <TaskModal onClose={() => setShowTaskModal(false)} onSave={handleCreateTask} />
-      )}
+      {showTaskModal && <TaskModal onClose={() => setShowTaskModal(false)} onSave={handleCreateTask} />}
     </div>
   );
 }

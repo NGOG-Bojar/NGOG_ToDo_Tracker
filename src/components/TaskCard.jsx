@@ -4,20 +4,36 @@ import { format, isToday, isPast, parseISO } from 'date-fns';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useCategory } from '../contexts/CategoryContext';
+import { useProject } from '../contexts/ProjectContext';
 import TaskModal from './TaskModal';
 import DOMPurify from 'dompurify';
 
-const { FiCheck, FiClock, FiAlertTriangle, FiEdit3, FiTrash2, FiCalendar, FiZap, FiChevronDown, FiChevronUp, FiFileText } = FiIcons;
+const {
+  FiCheck, FiClock, FiAlertTriangle, FiEdit3, FiTrash2, FiCalendar,
+  FiZap, FiChevronDown, FiChevronUp, FiFileText, FiBriefcase, FiLink
+} = FiIcons;
 
 function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
   const [showModal, setShowModal] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const { getCategoryById } = useCategory();
+  const { projects, getProjectById } = useProject();
 
-  const isOverdue = task.dueDate && isPast(parseISO(task.dueDate)) && !isToday(parseISO(task.dueDate)) && task.status === 'open';
-  const isDueToday = task.dueDate && isToday(parseISO(task.dueDate)) && task.status === 'open';
+  const isOverdue = task.dueDate && 
+    isPast(parseISO(task.dueDate)) && 
+    !isToday(parseISO(task.dueDate)) && 
+    task.status === 'open';
+    
+  const isDueToday = task.dueDate && 
+    isToday(parseISO(task.dueDate)) && 
+    task.status === 'open';
+    
   const isUrgent = task.priority === 'urgent' && task.status === 'open';
   const isHighPriority = task.priority === 'high' && task.status === 'open';
+
+  // Get linked project if it exists
+  const linkedProject = task.linkedProject ? 
+    getProjectById(task.linkedProject) : null;
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -51,8 +67,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
   
   // Create a truncated version for condensed view
   const truncatedDescription = hasLongDescription ? 
-    `${sanitizedDescription.replace(/<[^>]*>/g, '').substring(0, 120)}...` : 
-    '';
+    `${sanitizedDescription.replace(/<[^>]*>/g, '').substring(0, 120)}...` : '';
 
   const handleCardClick = (e) => {
     // Only expand if we're in condensed mode and not clicking a button
@@ -93,7 +108,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
             >
               <SafeIcon icon={FiCheck} className="text-sm" />
             </button>
-
+            
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2 mb-2">
                 <h3
@@ -107,7 +122,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                 >
                   {task.title}
                 </h3>
-
+                
                 {/* Priority indicators - Only urgent tasks get the flashing icon */}
                 {isUrgent && (
                   <motion.div
@@ -117,14 +132,14 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                     <SafeIcon icon={FiZap} className="text-red-600 text-xl" />
                   </motion.div>
                 )}
-
+                
                 {/* Static icon for high priority */}
                 {(isHighPriority && !isUrgent) && (
                   <div>
                     <SafeIcon icon={FiAlertTriangle} className="text-red-500 text-sm" />
                   </div>
                 )}
-
+                
                 {/* Static icon for overdue but not urgent or high priority */}
                 {(isOverdue && !isUrgent && !isHighPriority) && (
                   <div>
@@ -132,20 +147,34 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                   </div>
                 )}
               </div>
+              
+              {/* Project badge - Show the linked project if available */}
+              {linkedProject && (
+                <div className="mb-2">
+                  <div className="flex items-center space-x-2">
+                    <span 
+                      className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-600"
+                    >
+                      <SafeIcon icon={FiBriefcase} className="text-xs" />
+                      <span>Project: {linkedProject.title}</span>
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Description - conditional rendering based on condensed mode */}
               {sanitizedDescription && !condensed && (
                 <>
                   {hasLongDescription && !expanded ? (
                     <div className="mb-2">
-                      <div 
+                      <div
                         className={`text-sm ${
                           task.status === 'completed' ? 'text-gray-400' : 'text-gray-600'
                         }`}
                       >
                         {truncatedDescription}
                       </div>
-                      <button 
+                      <button
                         onClick={toggleExpand}
                         className="text-xs text-blue-600 hover:text-blue-800 mt-1 flex items-center"
                       >
@@ -154,13 +183,13 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                     </div>
                   ) : hasLongDescription ? (
                     <div className="mb-2">
-                      <div 
+                      <div
                         className={`text-sm mb-1 ${
                           task.status === 'completed' ? 'text-gray-400' : 'text-gray-600'
                         } rich-text-content`}
                         dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
                       />
-                      <button 
+                      <button
                         onClick={toggleExpand}
                         className="text-xs text-blue-600 hover:text-blue-800 mt-1 flex items-center"
                       >
@@ -168,7 +197,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                       </button>
                     </div>
                   ) : (
-                    <div 
+                    <div
                       className={`text-sm mb-2 ${
                         task.status === 'completed' ? 'text-gray-400' : 'text-gray-600'
                       } rich-text-content`}
@@ -177,7 +206,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                   )}
                 </>
               )}
-              
+
               {/* In condensed mode, only show a preview indicator if there's a description */}
               {sanitizedDescription && condensed && (
                 <div className="text-xs text-gray-500 mb-2 flex items-center">
@@ -201,7 +230,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                     <span>{format(parseISO(task.dueDate), 'MMM dd, yyyy')}</span>
                   </div>
                 )}
-
+                
                 <div
                   className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
                     task.priority
@@ -210,17 +239,18 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
                   <SafeIcon icon={getPriorityIcon(task.priority)} className="text-xs" />
                   <span>{task.priority}</span>
                 </div>
-
+                
                 <span className={`text-xs ${getStatusColor(task.status)}`}>
                   {task.status}
                 </span>
               </div>
-
+              
               {task.categories && task.categories.length > 0 && (
                 <div className="flex items-center space-x-2 mt-2">
                   {task.categories.map(categoryId => {
                     const category = getCategoryById(categoryId);
                     if (!category) return null;
+                    
                     return (
                       <span
                         key={categoryId}
@@ -235,7 +265,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
               )}
             </div>
           </div>
-
+          
           <div className="flex items-center space-x-2">
             <button
               onClick={(e) => {
@@ -246,6 +276,7 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
             >
               <SafeIcon icon={FiEdit3} className="text-sm" />
             </button>
+            
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -258,9 +289,13 @@ function TaskCard({ task, onToggle, onDelete, onUpdate, condensed = false }) {
           </div>
         </div>
       </motion.div>
-
+      
       {showModal && (
-        <TaskModal task={task} onClose={() => setShowModal(false)} onSave={onUpdate} />
+        <TaskModal
+          task={task}
+          onClose={() => setShowModal(false)}
+          onSave={onUpdate}
+        />
       )}
     </>
   );

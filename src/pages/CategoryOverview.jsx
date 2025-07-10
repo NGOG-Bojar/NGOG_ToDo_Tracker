@@ -5,27 +5,21 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useTask } from '../contexts/TaskContext';
 import { useCategory } from '../contexts/CategoryContext';
+import { useProject } from '../contexts/ProjectContext';
 import TaskModal from '../components/TaskModal';
 import TaskCard from '../components/TaskCard';
 import { format, isToday, isPast, parseISO } from 'date-fns';
 
-const { FiPlus, FiFilter, FiTag, FiGrid, FiClock, FiAlertTriangle, FiZap, FiCheck, FiCalendar, FiFileText } = FiIcons;
+const { FiPlus, FiFilter, FiTag, FiGrid, FiClock, FiAlertTriangle, FiZap, FiCheck, FiCalendar, FiFileText, FiBriefcase } = FiIcons;
 
 function CategoryOverview() {
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [filterStatus, setFilterStatus] = useState('open'); // Default to showing only open tasks
-  const {
-    tasks,
-    addTask,
-    updateTask,
-    deleteTask,
-    toggleTaskStatus,
-    getOverdueTasks,
-    getTasksDueToday,
-    getUrgentTasks,
-    getHighPriorityTasks
-  } = useTask();
+  
+  const { tasks, addTask, updateTask, deleteTask, toggleTaskStatus, getOverdueTasks, getTasksDueToday, getUrgentTasks, getHighPriorityTasks } = useTask();
   const { categories, getCategoryById } = useCategory();
+  const { getProjectById, linkTaskToProject } = useProject();
 
   // Get priority task lists
   const overdueTasks = getOverdueTasks();
@@ -35,19 +29,48 @@ function CategoryOverview() {
 
   // Get tasks with no categories
   const uncategorizedTasks = tasks.filter(
-    task => (!task.categories || task.categories.length === 0) && (filterStatus === 'all' || task.status === filterStatus)
+    task =>
+      (!task.categories || task.categories.length === 0) &&
+      (filterStatus === 'all' || task.status === filterStatus)
   );
 
   // Get tasks for each category
   const getTasksByCategory = (categoryId) => {
     return tasks.filter(
-      task => task.categories && task.categories.includes(categoryId) && (filterStatus === 'all' || task.status === filterStatus)
+      task =>
+        task.categories &&
+        task.categories.includes(categoryId) &&
+        (filterStatus === 'all' || task.status === filterStatus)
     );
   };
 
   const handleCreateTask = (taskData) => {
-    addTask(taskData);
+    const newTask = addTask(taskData);
+    
+    // Explicitly handle project linking - this ensures the project's linkedTasks array is updated
+    if (newTask && taskData.linkedProject) {
+      linkTaskToProject(taskData.linkedProject, newTask.id, newTask.title);
+    }
+    
     setShowTaskModal(false);
+    setSelectedTask(null);
+    
+    // Return the new task so the modal handler can use it
+    return newTask;
+  };
+  
+  const handleUpdateTask = (id, updates) => {
+    updateTask(id, updates);
+    setSelectedTask(null);
+  };
+
+  // Handler for clicking on a task in the priority sections
+  const handleTaskClick = (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setSelectedTask(task);
+      setShowTaskModal(true);
+    }
   };
 
   // Compact Task Item Component
@@ -58,6 +81,9 @@ function CategoryOverview() {
     const isUrgent = task.priority === 'urgent' && task.status === 'open';
     const isHighPriority = task.priority === 'high' && task.status === 'open';
     const hasDescription = task.description && task.description.trim() !== '';
+
+    // Get linked project if it exists
+    const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
 
     return (
       <>
@@ -112,10 +138,18 @@ function CategoryOverview() {
               {isOverdue && !isUrgent && !isHighPriority && (
                 <SafeIcon icon={FiAlertTriangle} className="text-red-500 text-xs" />
               )}
-              
+
               {/* Description indicator */}
               {hasDescription && <SafeIcon icon={FiFileText} className="text-gray-400 text-xs" />}
             </div>
+
+            {/* Project info if linked */}
+            {linkedProject && (
+              <div className="flex items-center space-x-1 mt-1">
+                <SafeIcon icon={FiBriefcase} className="text-blue-500 text-xs" />
+                <span className="text-xs text-blue-600 truncate">{linkedProject.title}</span>
+              </div>
+            )}
 
             {/* Due date and priority info */}
             <div className="flex items-center space-x-2 mt-1">
@@ -145,12 +179,11 @@ function CategoryOverview() {
             </div>
           </div>
         </motion.div>
-        
         {showModal && (
-          <TaskModal 
-            task={task} 
-            onClose={() => setShowModal(false)} 
-            onSave={(updates) => onUpdate(task.id, updates)} 
+          <TaskModal
+            task={task}
+            onClose={() => setShowModal(false)}
+            onSave={(updates) => onUpdate(task.id, updates)}
           />
         )}
       </>
@@ -176,7 +209,10 @@ function CategoryOverview() {
             <option value="all">All Tasks</option>
           </select>
           <button
-            onClick={() => setShowTaskModal(true)}
+            onClick={() => {
+              setSelectedTask(null);
+              setShowTaskModal(true);
+            }}
             className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <SafeIcon icon={FiPlus} className="text-lg" />
@@ -208,25 +244,35 @@ function CategoryOverview() {
               <p className="text-gray-500 text-sm text-center py-4">No urgent tasks</p>
             ) : (
               <div className="space-y-2">
-                {urgentTasks.slice(0, 5).map(task => (
-                  <div
-                    key={task.id}
-                    className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
-                    onClick={() => {
-                      const taskToEdit = tasks.find(t => t.id === task.id);
-                      if (taskToEdit) {
-                        setShowTaskModal(true);
-                      }
-                    }}
-                  >
-                    <motion.div
-                      className="w-3 h-3 bg-red-600 rounded-full flex-shrink-0"
-                      animate={{ scale: [1, 1.3, 1] }}
-                      transition={{ duration: 0.8, repeat: Infinity }}
-                    />
-                    <span className="text-sm text-red-600 font-medium truncate">{task.title}</span>
-                  </div>
-                ))}
+                {urgentTasks.slice(0, 5).map(task => {
+                  // Get linked project if it exists
+                  const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
+                      onClick={() => handleTaskClick(task.id)}
+                    >
+                      <motion.div
+                        className="w-3 h-3 bg-red-600 rounded-full flex-shrink-0"
+                        animate={{ scale: [1, 1.3, 1] }}
+                        transition={{ duration: 0.8, repeat: Infinity }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-red-600 font-medium truncate">
+                          {task.title}
+                        </span>
+                        {linkedProject && (
+                          <div className="text-xs text-blue-600 flex items-center mt-0.5">
+                            <SafeIcon icon={FiBriefcase} className="text-xs mr-1" />
+                            {linkedProject.title}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {urgentTasks.length > 5 && (
                   <Link to="/tasks" className="text-blue-600 text-xs hover:underline block text-center mt-2">
                     View all {urgentTasks.length} urgent tasks
@@ -258,21 +304,29 @@ function CategoryOverview() {
               <p className="text-gray-500 text-sm text-center py-4">No tasks due today</p>
             ) : (
               <div className="space-y-2">
-                {tasksDueToday.slice(0, 5).map(task => (
-                  <div
-                    key={task.id}
-                    className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
-                    onClick={() => {
-                      const taskToEdit = tasks.find(t => t.id === task.id);
-                      if (taskToEdit) {
-                        setShowTaskModal(true);
-                      }
-                    }}
-                  >
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
-                    <span className="text-sm text-gray-700 truncate">{task.title}</span>
-                  </div>
-                ))}
+                {tasksDueToday.slice(0, 5).map(task => {
+                  // Get linked project if it exists
+                  const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
+                      onClick={() => handleTaskClick(task.id)}
+                    >
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-gray-700 truncate">{task.title}</span>
+                        {linkedProject && (
+                          <div className="text-xs text-blue-600 flex items-center mt-0.5">
+                            <SafeIcon icon={FiBriefcase} className="text-xs mr-1" />
+                            {linkedProject.title}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {tasksDueToday.length > 5 && (
                   <Link to="/tasks" className="text-blue-600 text-xs hover:underline block text-center mt-2">
                     View all {tasksDueToday.length} tasks due today
@@ -304,21 +358,29 @@ function CategoryOverview() {
               <p className="text-gray-500 text-sm text-center py-4">No overdue tasks</p>
             ) : (
               <div className="space-y-2">
-                {overdueTasks.slice(0, 5).map(task => (
-                  <div
-                    key={task.id}
-                    className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
-                    onClick={() => {
-                      const taskToEdit = tasks.find(t => t.id === task.id);
-                      if (taskToEdit) {
-                        setShowTaskModal(true);
-                      }
-                    }}
-                  >
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></div>
-                    <span className="text-sm text-gray-700 truncate">{task.title}</span>
-                  </div>
-                ))}
+                {overdueTasks.slice(0, 5).map(task => {
+                  // Get linked project if it exists
+                  const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
+                      onClick={() => handleTaskClick(task.id)}
+                    >
+                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-gray-700 truncate">{task.title}</span>
+                        {linkedProject && (
+                          <div className="text-xs text-blue-600 flex items-center mt-0.5">
+                            <SafeIcon icon={FiBriefcase} className="text-xs mr-1" />
+                            {linkedProject.title}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {overdueTasks.length > 5 && (
                   <Link to="/tasks" className="text-blue-600 text-xs hover:underline block text-center mt-2">
                     View all {overdueTasks.length} overdue tasks
@@ -350,21 +412,29 @@ function CategoryOverview() {
               <p className="text-gray-500 text-sm text-center py-4">No high priority tasks</p>
             ) : (
               <div className="space-y-2">
-                {highPriorityTasks.slice(0, 5).map(task => (
-                  <div
-                    key={task.id}
-                    className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
-                    onClick={() => {
-                      const taskToEdit = tasks.find(t => t.id === task.id);
-                      if (taskToEdit) {
-                        setShowTaskModal(true);
-                      }
-                    }}
-                  >
-                    <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
-                    <span className="text-sm text-gray-700 truncate">{task.title}</span>
-                  </div>
-                ))}
+                {highPriorityTasks.slice(0, 5).map(task => {
+                  // Get linked project if it exists
+                  const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-50 rounded cursor-pointer"
+                      onClick={() => handleTaskClick(task.id)}
+                    >
+                      <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-gray-700 truncate">{task.title}</span>
+                        {linkedProject && (
+                          <div className="text-xs text-blue-600 flex items-center mt-0.5">
+                            <SafeIcon icon={FiBriefcase} className="text-xs mr-1" />
+                            {linkedProject.title}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {highPriorityTasks.length > 5 && (
                   <Link to="/tasks" className="text-blue-600 text-xs hover:underline block text-center mt-2">
                     View all {highPriorityTasks.length} high priority tasks
@@ -384,6 +454,7 @@ function CategoryOverview() {
           if (categoryTasks.length === 0 && filterStatus !== 'all') {
             return null; // Don't show empty categories when filtering
           }
+
           return (
             <motion.div
               key={category.id}
@@ -467,8 +538,17 @@ function CategoryOverview() {
         </motion.div>
       </div>
 
-      {/* Task Modal */}
-      {showTaskModal && <TaskModal onClose={() => setShowTaskModal(false)} onSave={handleCreateTask} />}
+      {/* Task Modal - Conditionally render for new or existing task */}
+      {showTaskModal && (
+        <TaskModal 
+          task={selectedTask} 
+          onClose={() => {
+            setShowTaskModal(false);
+            setSelectedTask(null);
+          }} 
+          onSave={selectedTask ? handleUpdateTask : handleCreateTask} 
+        />
+      )}
     </div>
   );
 }

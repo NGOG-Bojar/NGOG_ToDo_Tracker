@@ -28,7 +28,10 @@ const STATUS_COLORS = {
 function projectReducer(state, action) {
   switch (action.type) {
     case 'LOAD_PROJECTS':
-      return { ...state, projects: action.payload };
+      return {
+        ...state,
+        projects: action.payload
+      };
     case 'ADD_PROJECT':
       return {
         ...state,
@@ -39,14 +42,16 @@ function projectReducer(state, action) {
             ...action.payload,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            activityLog: [{
-              id: uuidv4(),
-              type: 'created',
-              message: 'Project created',
-              timestamp: new Date().toISOString(),
-              auto: true,
-              category: 'general'
-            }]
+            activityLog: [
+              {
+                id: uuidv4(),
+                type: 'created',
+                message: 'Project created',
+                timestamp: new Date().toISOString(),
+                auto: true,
+                category: 'general'
+              }
+            ]
           }
         ]
       };
@@ -111,8 +116,8 @@ function projectReducer(state, action) {
           if (project.id === action.payload.projectId) {
             return {
               ...project,
-              activityLog: (project.activityLog || []).filter(entry => 
-                entry.id !== action.payload.entryId
+              activityLog: (project.activityLog || []).filter(
+                entry => entry.id !== action.payload.entryId
               )
             };
           }
@@ -153,8 +158,8 @@ function projectReducer(state, action) {
           if (project.id === action.payload.projectId) {
             return {
               ...project,
-              linkedTasks: (project.linkedTasks || []).filter(taskId => 
-                taskId !== action.payload.taskId
+              linkedTasks: (project.linkedTasks || []).filter(
+                taskId => taskId !== action.payload.taskId
               ),
               activityLog: [
                 ...(project.activityLog || []),
@@ -184,7 +189,10 @@ export function ProjectProvider({ children }) {
   useEffect(() => {
     const savedProjects = localStorage.getItem('todoProjects');
     if (savedProjects) {
-      dispatch({ type: 'LOAD_PROJECTS', payload: JSON.parse(savedProjects) });
+      dispatch({
+        type: 'LOAD_PROJECTS',
+        payload: JSON.parse(savedProjects)
+      });
     }
   }, []);
 
@@ -194,31 +202,52 @@ export function ProjectProvider({ children }) {
   }, [state.projects]);
 
   const addProject = (projectData) => {
-    dispatch({ type: 'ADD_PROJECT', payload: projectData });
+    dispatch({
+      type: 'ADD_PROJECT',
+      payload: projectData
+    });
   };
 
   const updateProject = (id, updates) => {
-    dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates } });
+    dispatch({
+      type: 'UPDATE_PROJECT',
+      payload: { id, updates }
+    });
   };
 
   const deleteProject = (id) => {
-    dispatch({ type: 'DELETE_PROJECT', payload: id });
+    dispatch({
+      type: 'DELETE_PROJECT',
+      payload: id
+    });
   };
 
   const addActivityLog = (projectId, entry) => {
-    dispatch({ type: 'ADD_ACTIVITY_LOG', payload: { projectId, entry } });
+    dispatch({
+      type: 'ADD_ACTIVITY_LOG',
+      payload: { projectId, entry }
+    });
   };
 
   const deleteActivityLog = (projectId, entryId) => {
-    dispatch({ type: 'DELETE_ACTIVITY_LOG', payload: { projectId, entryId } });
+    dispatch({
+      type: 'DELETE_ACTIVITY_LOG',
+      payload: { projectId, entryId }
+    });
   };
 
   const linkTaskToProject = (projectId, taskId, taskTitle) => {
-    dispatch({ type: 'LINK_TASK_TO_PROJECT', payload: { projectId, taskId, taskTitle } });
+    dispatch({
+      type: 'LINK_TASK_TO_PROJECT',
+      payload: { projectId, taskId, taskTitle }
+    });
   };
 
   const unlinkTaskFromProject = (projectId, taskId, taskTitle) => {
-    dispatch({ type: 'UNLINK_TASK_FROM_PROJECT', payload: { projectId, taskId, taskTitle } });
+    dispatch({
+      type: 'UNLINK_TASK_FROM_PROJECT',
+      payload: { projectId, taskId, taskTitle }
+    });
   };
 
   const getProjectById = (id) => {
@@ -244,11 +273,7 @@ export function ProjectProvider({ children }) {
     STATUS_COLORS
   };
 
-  return (
-    <ProjectContext.Provider value={value}>
-      {children}
-    </ProjectContext.Provider>
-  );
+  return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 }
 
 export const useProject = () => {

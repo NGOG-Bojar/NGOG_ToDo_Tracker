@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { isToday, isPast, parseISO } from 'date-fns';
+import { useProject } from './ProjectContext';
 
 const TaskContext = createContext();
 
@@ -17,7 +18,10 @@ const initialState = {
 function taskReducer(state, action) {
   switch (action.type) {
     case 'LOAD_TASKS':
-      return { ...state, tasks: action.payload };
+      return {
+        ...state,
+        tasks: action.payload
+      };
     case 'ADD_TASK':
       const newTask = {
         ...action.payload.taskData,
@@ -57,7 +61,10 @@ function taskReducer(state, action) {
         )
       };
     case 'SET_SEARCH_TERM':
-      return { ...state, searchTerm: action.payload };
+      return {
+        ...state,
+        searchTerm: action.payload
+      };
     case 'SET_SORT':
       return {
         ...state,
@@ -81,7 +88,10 @@ export function TaskProvider({ children }) {
   useEffect(() => {
     const savedTasks = localStorage.getItem('todoTasks');
     if (savedTasks) {
-      dispatch({ type: 'LOAD_TASKS', payload: JSON.parse(savedTasks) });
+      dispatch({
+        type: 'LOAD_TASKS',
+        payload: JSON.parse(savedTasks)
+      });
     }
   }, []);
 
@@ -92,10 +102,11 @@ export function TaskProvider({ children }) {
 
   const addTask = (taskData) => {
     const taskId = uuidv4();
-    dispatch({ 
-      type: 'ADD_TASK', 
-      payload: { taskData, id: taskId } 
+    dispatch({
+      type: 'ADD_TASK',
+      payload: { taskData, id: taskId }
     });
+    
     // Return the task object with the generated ID
     return {
       ...taskData,
@@ -106,27 +117,45 @@ export function TaskProvider({ children }) {
   };
 
   const updateTask = (id, updates) => {
-    dispatch({ type: 'UPDATE_TASK', payload: { id, ...updates } });
+    dispatch({
+      type: 'UPDATE_TASK',
+      payload: { id, ...updates }
+    });
   };
 
   const deleteTask = (id) => {
-    dispatch({ type: 'DELETE_TASK', payload: id });
+    dispatch({
+      type: 'DELETE_TASK',
+      payload: id
+    });
   };
 
   const toggleTaskStatus = (id) => {
-    dispatch({ type: 'TOGGLE_TASK_STATUS', payload: id });
+    dispatch({
+      type: 'TOGGLE_TASK_STATUS',
+      payload: id
+    });
   };
 
   const setSearchTerm = (term) => {
-    dispatch({ type: 'SET_SEARCH_TERM', payload: term });
+    dispatch({
+      type: 'SET_SEARCH_TERM',
+      payload: term
+    });
   };
 
   const setSort = (sortBy, sortOrder) => {
-    dispatch({ type: 'SET_SORT', payload: { sortBy, sortOrder } });
+    dispatch({
+      type: 'SET_SORT',
+      payload: { sortBy, sortOrder }
+    });
   };
 
   const setFilter = (type, value) => {
-    dispatch({ type: 'SET_FILTER', payload: { type, value } });
+    dispatch({
+      type: 'SET_FILTER',
+      payload: { type, value }
+    });
   };
 
   // Get filtered and sorted tasks
@@ -162,7 +191,6 @@ export function TaskProvider({ children }) {
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue, bValue;
-
       switch (state.sortBy) {
         case 'dueDate':
           aValue = a.dueDate ? new Date(a.dueDate) : new Date('9999-12-31');
@@ -210,10 +238,7 @@ export function TaskProvider({ children }) {
   // Get tasks due today
   const getTasksDueToday = () => {
     return state.tasks.filter(
-      task =>
-        task.status === 'open' &&
-        task.dueDate &&
-        isToday(parseISO(task.dueDate))
+      task => task.status === 'open' && task.dueDate && isToday(parseISO(task.dueDate))
     );
   };
 
@@ -244,6 +269,10 @@ export function TaskProvider({ children }) {
   };
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
+}
+
+export function TaskConsumer({ children }) {
+  return <TaskContext.Consumer>{children}</TaskContext.Consumer>;
 }
 
 export const useTask = () => {

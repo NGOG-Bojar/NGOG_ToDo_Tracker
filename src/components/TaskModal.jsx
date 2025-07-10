@@ -10,10 +10,9 @@ import 'react-quill/dist/quill.snow.css';
 
 const { FiX, FiPlus, FiTrash2, FiCheck, FiCalendar, FiArrowUp, FiArrowDown, FiMove, FiLink } = FiIcons;
 
-function TaskModal({ task, onClose, onSave }) {
+function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
   const { categories } = useCategory();
   const { projects, linkTaskToProject } = useProject();
-  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -22,9 +21,8 @@ function TaskModal({ task, onClose, onSave }) {
     categories: [],
     notes: '',
     checklist: [],
-    linkedProject: ''
+    linkedProject: preselectedProject // Auto-select the project if provided
   });
-  
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverItem, setDragOverItem] = useState(null);
 
@@ -38,10 +36,16 @@ function TaskModal({ task, onClose, onSave }) {
         categories: task.categories || [],
         notes: task.notes || '',
         checklist: task.checklist || [],
-        linkedProject: task.linkedProject || ''
+        linkedProject: task.linkedProject || preselectedProject
       });
+    } else {
+      // For new tasks, set the preselected project
+      setFormData(prev => ({
+        ...prev,
+        linkedProject: preselectedProject
+      }));
     }
-  }, [task]);
+  }, [task, preselectedProject]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -56,11 +60,12 @@ function TaskModal({ task, onClose, onSave }) {
     if (task) {
       onSave(task.id, taskData);
     } else {
+      // For new tasks, we need to handle the project linking properly
       const newTask = onSave(taskData);
       
-      // Link to project if selected
+      // If there's a linked project and we have the new task, link it
       if (formData.linkedProject && newTask) {
-        linkTaskToProject(formData.linkedProject, newTask.id || Date.now(), taskData.title);
+        linkTaskToProject(formData.linkedProject, newTask.id, taskData.title);
       }
     }
     
@@ -79,14 +84,17 @@ function TaskModal({ task, onClose, onSave }) {
   const addChecklistItem = () => {
     setFormData(prev => ({
       ...prev,
-      checklist: [...prev.checklist, { id: Date.now(), text: '', completed: false }]
+      checklist: [
+        ...prev.checklist,
+        { id: Date.now(), text: '', completed: false }
+      ]
     }));
   };
 
   const updateChecklistItem = (id, updates) => {
     setFormData(prev => ({
       ...prev,
-      checklist: prev.checklist.map(item => 
+      checklist: prev.checklist.map(item =>
         item.id === id ? { ...item, ...updates } : item
       )
     }));
@@ -347,9 +355,7 @@ function TaskModal({ task, onClose, onSave }) {
                         : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
                     }`}
                     style={{
-                      backgroundColor: formData.categories.includes(category.id) 
-                        ? category.color 
-                        : undefined
+                      backgroundColor: formData.categories.includes(category.id) ? category.color : undefined
                     }}
                   >
                     {category.name}
@@ -362,11 +368,15 @@ function TaskModal({ task, onClose, onSave }) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Link to Project
+                {preselectedProject && (
+                  <span className="text-xs text-blue-600 ml-2">(Auto-selected)</span>
+                )}
               </label>
               <select
                 value={formData.linkedProject}
                 onChange={(e) => setFormData(prev => ({ ...prev, linkedProject: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={!!preselectedProject} // Disable if preselected
               >
                 <option value="">No project selected</option>
                 {projects.map(project => (
@@ -452,9 +462,7 @@ function TaskModal({ task, onClose, onSave }) {
                         onClick={() => moveItemUp(item.id)}
                         disabled={index === 0}
                         className={`p-1 rounded hover:bg-gray-100 transition-colors ${
-                          index === 0
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-gray-400 hover:text-blue-600'
+                          index === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'
                         }`}
                         title="Move Up"
                       >

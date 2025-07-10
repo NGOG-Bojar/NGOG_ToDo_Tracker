@@ -4,14 +4,17 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useTask } from '../contexts/TaskContext';
 import { useCategory } from '../contexts/CategoryContext';
+import { useProject } from '../contexts/ProjectContext';
 import TaskCard from '../components/TaskCard';
 import { format, parseISO } from 'date-fns';
 
-const { FiArchive, FiTrash2, FiFilter, FiCalendar, FiSearch } = FiIcons;
+const { FiArchive, FiTrash2, FiFilter, FiCalendar, FiSearch, FiBriefcase } = FiIcons;
 
 function TaskArchive() {
   const { tasks, deleteTask, toggleTaskStatus, updateTask } = useTask();
   const { categories } = useCategory();
+  const { getProjectById } = useProject();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedPriority, setSelectedPriority] = useState('all');
@@ -24,23 +27,25 @@ function TaskArchive() {
   // Apply filters
   const filteredTasks = completedTasks.filter(task => {
     // Search filter
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch =
+      task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // Category filter
-    const matchesCategory = selectedCategory === 'all' ||
-      (task.categories && task.categories.includes(selectedCategory));
+    const matchesCategory =
+      selectedCategory === 'all' ||
+      (selectedCategory === 'uncategorized'
+        ? !task.categories || task.categories.length === 0
+        : task.categories && task.categories.includes(selectedCategory));
 
     // Priority filter
-    const matchesPriority = selectedPriority === 'all' ||
-      task.priority === selectedPriority;
+    const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority;
 
     // Time period filter
     let matchesPeriod = true;
     if (selectedPeriod !== 'all') {
       const completedDate = new Date(task.updatedAt || task.createdAt);
       const now = new Date();
-      
       switch (selectedPeriod) {
         case 'week':
           const weekAgo = new Date();
@@ -69,10 +74,9 @@ function TaskArchive() {
   const groupedTasks = {};
   if (groupByDate && filteredTasks.length > 0) {
     filteredTasks.forEach(task => {
-      const dateStr = task.updatedAt 
+      const dateStr = task.updatedAt
         ? format(parseISO(task.updatedAt), 'yyyy-MM-dd')
         : format(parseISO(task.createdAt), 'yyyy-MM-dd');
-      
       if (!groupedTasks[dateStr]) {
         groupedTasks[dateStr] = [];
       }
@@ -96,7 +100,11 @@ function TaskArchive() {
   };
 
   const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to permanently delete ALL archived tasks? This cannot be undone.')) {
+    if (
+      window.confirm(
+        'Are you sure you want to permanently delete ALL archived tasks? This cannot be undone.'
+      )
+    ) {
       completedTasks.forEach(task => deleteTask(task.id));
     }
   };
@@ -141,7 +149,10 @@ function TaskArchive() {
             {/* Search */}
             <div className="flex-1">
               <div className="relative">
-                <SafeIcon icon={FiSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <SafeIcon
+                  icon={FiSearch}
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
                 <input
                   type="text"
                   placeholder="Search archived tasks..."
@@ -208,7 +219,10 @@ function TaskArchive() {
               </button>
 
               {/* Clear Filters Button */}
-              {(searchTerm || selectedCategory !== 'all' || selectedPriority !== 'all' || selectedPeriod !== 'all') && (
+              {(searchTerm ||
+                selectedCategory !== 'all' ||
+                selectedPriority !== 'all' ||
+                selectedPeriod !== 'all') && (
                 <button
                   onClick={clearAllFilters}
                   className="flex items-center space-x-2 px-3 py-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
@@ -220,7 +234,10 @@ function TaskArchive() {
             </div>
 
             {/* Active Filters Display */}
-            {(searchTerm || selectedCategory !== 'all' || selectedPriority !== 'all' || selectedPeriod !== 'all') && (
+            {(searchTerm ||
+              selectedCategory !== 'all' ||
+              selectedPriority !== 'all' ||
+              selectedPeriod !== 'all') && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <span className="text-sm text-gray-500">Active filters:</span>
                 {searchTerm && (
@@ -230,7 +247,10 @@ function TaskArchive() {
                 )}
                 {selectedCategory !== 'all' && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Category: {selectedCategory === 'uncategorized' ? 'Uncategorized' : categories.find(c => c.id === selectedCategory)?.name}
+                    Category:{' '}
+                    {selectedCategory === 'uncategorized'
+                      ? 'Uncategorized'
+                      : categories.find(c => c.id === selectedCategory)?.name}
                   </span>
                 )}
                 {selectedPriority !== 'all' && (
@@ -240,7 +260,12 @@ function TaskArchive() {
                 )}
                 {selectedPeriod !== 'all' && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                    Period: {selectedPeriod === 'week' ? 'Last Week' : selectedPeriod === 'month' ? 'Last Month' : 'Last Quarter'}
+                    Period:{' '}
+                    {selectedPeriod === 'week'
+                      ? 'Last Week'
+                      : selectedPeriod === 'month'
+                      ? 'Last Month'
+                      : 'Last Quarter'}
                   </span>
                 )}
               </div>
@@ -253,20 +278,15 @@ function TaskArchive() {
       <div className="space-y-6">
         <AnimatePresence>
           {filteredTasks.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-12"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
               <SafeIcon icon={FiArchive} className="text-gray-300 text-6xl mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
                 {completedTasks.length === 0 ? 'No archived tasks found' : 'No tasks match your filters'}
               </p>
               <p className="text-gray-400 text-sm mt-2">
-                {completedTasks.length === 0 
-                  ? 'Tasks will appear here once they\'re marked as completed'
-                  : 'Try adjusting your filters to see more results'
-                }
+                {completedTasks.length === 0
+                  ? "Tasks will appear here once they're marked as completed"
+                  : 'Try adjusting your filters to see more results'}
               </p>
               {completedTasks.length > 0 && filteredTasks.length === 0 && (
                 <button
@@ -279,12 +299,7 @@ function TaskArchive() {
             </motion.div>
           ) : groupByDate ? (
             sortedDates.map(date => (
-              <motion.div
-                key={date}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-4"
-              >
+              <motion.div key={date} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                 <div className="flex items-center space-x-3">
                   <div className="h-px bg-gray-200 flex-grow"></div>
                   <h3 className="text-sm font-medium text-gray-500">
@@ -299,6 +314,7 @@ function TaskArchive() {
                     onDelete={handleDeleteTask}
                     onRestore={handleRestoreTask}
                     onUpdate={updateTask}
+                    getProjectById={getProjectById}
                   />
                 ))}
               </motion.div>
@@ -311,6 +327,7 @@ function TaskArchive() {
                 onDelete={handleDeleteTask}
                 onRestore={handleRestoreTask}
                 onUpdate={updateTask}
+                getProjectById={getProjectById}
               />
             ))
           )}
@@ -321,7 +338,9 @@ function TaskArchive() {
 }
 
 // Special version of TaskCard for archived tasks
-function TaskArchiveCard({ task, onDelete, onRestore, onUpdate }) {
+function TaskArchiveCard({ task, onDelete, onRestore, onUpdate, getProjectById }) {
+  const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+
   return (
     <motion.div
       layout
@@ -339,21 +358,32 @@ function TaskArchiveCard({ task, onDelete, onRestore, onUpdate }) {
             <SafeIcon icon={FiArchive} className="text-sm" />
           </button>
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-gray-500 line-through">
-              {task.title}
-            </h3>
-            {task.description && (
-              <p className="text-sm mb-2 text-gray-400">{task.description}</p>
+            <h3 className="font-medium text-gray-500 line-through">{task.title}</h3>
+            
+            {/* Show project if linked */}
+            {linkedProject && (
+              <div className="flex items-center space-x-1 mt-1 mb-1">
+                <SafeIcon icon={FiBriefcase} className="text-blue-400 text-xs" />
+                <span className="text-xs text-blue-400">Project: {linkedProject.title}</span>
+              </div>
             )}
+            
+            {task.description && <p className="text-sm mb-2 text-gray-400">{task.description}</p>}
+            
             <div className="flex items-center space-x-2 text-xs text-gray-400 mt-1">
               <span>Completed: {format(parseISO(task.updatedAt || task.createdAt), 'MMM dd, yyyy')}</span>
               <span>•</span>
-              <span className={`px-2 py-1 rounded-full ${
-                task.priority === 'urgent' ? 'bg-red-100 text-red-600' :
-                task.priority === 'high' ? 'bg-red-100 text-red-600' :
-                task.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' :
-                'bg-green-100 text-green-600'
-              }`}>
+              <span
+                className={`px-2 py-1 rounded-full ${
+                  task.priority === 'urgent'
+                    ? 'bg-red-100 text-red-600'
+                    : task.priority === 'high'
+                    ? 'bg-red-100 text-red-600'
+                    : task.priority === 'medium'
+                    ? 'bg-yellow-100 text-yellow-600'
+                    : 'bg-green-100 text-green-600'
+                }`}
+              >
                 {task.priority}
               </span>
             </div>

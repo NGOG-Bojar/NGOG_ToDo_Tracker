@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import SafeIcon from '../common/SafeIcon';
@@ -13,21 +13,33 @@ import DOMPurify from 'dompurify';
 
 const { 
   FiX, FiPlus, FiUser, FiMail, FiPhone, FiLink, FiUnlink, FiMessageSquare, 
-  FiCalendar, FiActivity, FiEdit3, FiTrash2, FiTag
+  FiCalendar, FiActivity, FiEdit3, FiTrash2, FiTag, FiEye, FiCheck
 } = FiIcons;
 
 function ProjectDetailsModal({ project, onClose, onEdit }) {
   const { STATUS_COLORS, addActivityLog, linkTaskToProject, unlinkTaskFromProject, deleteActivityLog } = useProject();
-  const { tasks, addTask } = useTask();
+  const { tasks, addTask, updateTask, toggleTaskStatus } = useTask();
   const { getActiveActivityLogCategories, getActivityLogCategoryById } = useActivityLogCategory();
   const [activeTab, setActiveTab] = useState('overview');
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [showActivityForm, setShowActivityForm] = useState(false);
   const [activityMessage, setActivityMessage] = useState('');
   const [activityCategory, setActivityCategory] = useState('general');
   const [showLinkTaskModal, setShowLinkTaskModal] = useState(false);
+  // State to force refresh of linked tasks
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const activeActivityLogCategories = getActiveActivityLogCategories();
+
+  // Refresh linked tasks whenever tasks change or when refreshKey changes
+  const linkedTasks = tasks.filter(task => 
+    project?.linkedTasks && project.linkedTasks.includes(task.id)
+  );
+
+  const availableTasksToLink = tasks.filter(task => 
+    !project?.linkedTasks || !project.linkedTasks.includes(task.id)
+  );
 
   if (!project) return null;
 
@@ -43,14 +55,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     return labels[status] || status;
   };
 
-  const linkedTasks = tasks.filter(task => 
-    project.linkedTasks && project.linkedTasks.includes(task.id)
-  );
-
-  const availableTasksToLink = tasks.filter(task => 
-    !project.linkedTasks || !project.linkedTasks.includes(task.id)
-  );
-
   const handleCreateTask = (taskData) => {
     // Create the task and get the returned task object
     const newTask = addTask(taskData);
@@ -60,6 +64,22 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     
     // Close the modal
     setShowTaskModal(false);
+    
+    // Force refresh of linked tasks
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleUpdateTask = (taskId, updates) => {
+    updateTask(taskId, updates);
+    setEditingTask(null);
+    // Force refresh of linked tasks
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleToggleTaskStatus = (taskId) => {
+    toggleTaskStatus(taskId);
+    // Force refresh of linked tasks
+    setRefreshKey(prev => prev + 1);
   };
 
   const handleAddActivity = (e) => {
@@ -88,6 +108,8 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     if (task) {
       linkTaskToProject(project.id, taskId, task.title);
       setShowLinkTaskModal(false);
+      // Force refresh of linked tasks
+      setRefreshKey(prev => prev + 1);
     }
   };
 
@@ -95,7 +117,14 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     const task = tasks.find(t => t.id === taskId);
     if (task) {
       unlinkTaskFromProject(project.id, taskId, task.title);
+      // Force refresh of linked tasks
+      setRefreshKey(prev => prev + 1);
     }
+  };
+
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setShowTaskModal(true);
   };
 
   // Rich text editor modules configuration
@@ -186,6 +215,11 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                   <div className="flex items-center space-x-2">
                     <SafeIcon icon={tab.icon} className="text-lg" />
                     <span>{tab.label}</span>
+                    {tab.id === 'tasks' && linkedTasks.length > 0 && (
+                      <span className="bg-blue-100 text-blue-600 text-xs rounded-full px-2 py-0.5">
+                        {linkedTasks.length}
+                      </span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -277,7 +311,10 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                       <span>Link Existing Task</span>
                     </button>
                     <button
-                      onClick={() => setShowTaskModal(true)}
+                      onClick={() => {
+                        setEditingTask(null);
+                        setShowTaskModal(true);
+                      }}
                       className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 text-sm"
                     >
                       <SafeIcon icon={FiPlus} className="text-sm" />
@@ -288,30 +325,87 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                 {linkedTasks.length > 0 ? (
                   <div className="space-y-3">
                     {linkedTasks.map((task) => (
-                      <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-3 h-3 rounded-full ${
-                            task.status === 'completed' ? 'bg-green-500' : 'bg-gray-300'
-                          }`} />
-                          <div>
-                            <h4 className={`font-medium ${
-                              task.status === 'completed' 
-                                ? 'line-through text-gray-500' 
-                                : 'text-gray-900'
-                            }`}>
-                              {task.title}
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Priority: {task.priority} • Status: {task.status}
-                            </p>
+                      <div 
+                        key={task.id} 
+                        className="p-3 border rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleTaskStatus(task.id);
+                              }}
+                              className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                                task.status === 'completed' 
+                                  ? 'bg-green-500 border-green-500 text-white' 
+                                  : 'border-gray-300 hover:border-green-500'
+                              }`}
+                            >
+                              {task.status === 'completed' && <SafeIcon icon={FiCheck} className="text-white text-xs" />}
+                            </button>
+                            <div>
+                              <h4 
+                                className={`font-medium ${
+                                  task.status === 'completed' 
+                                    ? 'line-through text-gray-500' 
+                                    : 'text-gray-900'
+                                }`}
+                              >
+                                {task.title}
+                              </h4>
+                              <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                                <span className={`px-2 py-1 rounded-full ${
+                                  task.priority === 'urgent' 
+                                    ? 'bg-red-100 text-red-600' 
+                                    : task.priority === 'high' 
+                                    ? 'bg-orange-100 text-orange-600' 
+                                    : task.priority === 'medium' 
+                                    ? 'bg-yellow-100 text-yellow-600' 
+                                    : 'bg-green-100 text-green-600'
+                                }`}>
+                                  {task.priority}
+                                </span>
+                                {task.dueDate && (
+                                  <span>Due: {format(parseISO(task.dueDate), 'MMM dd, yyyy')}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditTask(task);
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Edit Task"
+                            >
+                              <SafeIcon icon={FiEdit3} className="text-sm" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnlinkTask(task.id);
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                              title="Unlink Task"
+                            >
+                              <SafeIcon icon={FiUnlink} className="text-sm" />
+                            </button>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleUnlinkTask(task.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <SafeIcon icon={FiUnlink} className="text-sm" />
-                        </button>
+                        
+                        {/* Task Description Preview (if available) */}
+                        {task.description && (
+                          <div 
+                            className="mt-2 text-sm text-gray-600 rich-text-content line-clamp-2 pl-8"
+                            dangerouslySetInnerHTML={{ 
+                              __html: DOMPurify.sanitize(task.description).substring(0, 150) + 
+                                (task.description.length > 150 ? '...' : '') 
+                            }}
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
@@ -448,21 +542,26 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
         </motion.div>
       </motion.div>
 
-      {/* Task Creation Modal */}
+      {/* Task Creation/Edit Modal - Pass preselected project */}
       {showTaskModal && (
         <TaskModal
-          onClose={() => setShowTaskModal(false)}
-          onSave={handleCreateTask}
+          task={editingTask}
+          onClose={() => {
+            setShowTaskModal(false);
+            setEditingTask(null);
+          }}
+          onSave={editingTask ? handleUpdateTask : handleCreateTask}
+          preselectedProject={project.id}
         />
       )}
 
-      {/* Link Task Modal */}
+      {/* Link Task Modal - Higher z-index */}
       {showLinkTaskModal && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
           onClick={() => setShowLinkTaskModal(false)}
         >
           <motion.div
@@ -473,7 +572,16 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Link Existing Task</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Link Existing Task</h3>
+                <button
+                  onClick={() => setShowLinkTaskModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <SafeIcon icon={FiX} className="text-lg" />
+                </button>
+              </div>
+              
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {availableTasksToLink.length > 0 ? (
                   availableTasksToLink.map((task) => (
@@ -492,6 +600,7 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                   <p className="text-gray-500 text-center py-4">No available tasks to link.</p>
                 )}
               </div>
+              
               <div className="flex justify-end mt-4">
                 <button
                   onClick={() => setShowLinkTaskModal(false)}

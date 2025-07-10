@@ -4,22 +4,18 @@ import { Link } from 'react-router-dom';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useTask } from '../contexts/TaskContext';
+import { useProject } from '../contexts/ProjectContext';
 import TaskModal from '../components/TaskModal';
 import TaskCompletionStats from '../components/TaskCompletionStats';
 
-const { FiPlus, FiCheckCircle, FiClock, FiAlertTriangle, FiList, FiZap } = FiIcons;
+const { FiPlus, FiCheckCircle, FiClock, FiAlertTriangle, FiList, FiZap, FiBriefcase } = FiIcons;
 
 function Dashboard() {
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const { 
-    tasks, 
-    addTask, 
-    getOverdueTasks, 
-    getTasksDueToday, 
-    getUrgentTasks,
-    getHighPriorityTasks 
-  } = useTask();
-
+  const [selectedTask, setSelectedTask] = useState(null);
+  const { tasks, addTask, updateTask, getOverdueTasks, getTasksDueToday, getUrgentTasks, getHighPriorityTasks } = useTask();
+  const { linkTaskToProject, getProjectById } = useProject();
+  
   const overdueTasks = getOverdueTasks();
   const tasksDueToday = getTasksDueToday();
   const urgentTasks = getUrgentTasks();
@@ -59,8 +55,33 @@ function Dashboard() {
   ];
 
   const handleCreateTask = (taskData) => {
-    addTask(taskData);
+    const newTask = addTask(taskData);
+    
+    // Explicitly handle project linking - this ensures the project's linkedTasks array is updated
+    if (newTask && taskData.linkedProject) {
+      linkTaskToProject(taskData.linkedProject, newTask.id, newTask.title);
+    }
+    
     setShowTaskModal(false);
+    setSelectedTask(null);
+    
+    // Return the new task so the modal handler can use it
+    return newTask;
+  };
+  
+  const handleUpdateTask = (id, updates) => {
+    updateTask(id, updates);
+    setSelectedTask(null);
+    setShowTaskModal(false);
+  };
+  
+  // Handler for clicking on a task in the priority sections
+  const handleTaskClick = (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setSelectedTask(task);
+      setShowTaskModal(true);
+    }
   };
 
   return (
@@ -72,7 +93,10 @@ function Dashboard() {
           <p className="text-gray-600">Overview of your tasks and productivity</p>
         </div>
         <button
-          onClick={() => setShowTaskModal(true)}
+          onClick={() => {
+            setSelectedTask(null);
+            setShowTaskModal(true);
+          }}
           className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
           <SafeIcon icon={FiPlus} className="text-lg" />
@@ -123,16 +147,32 @@ function Dashboard() {
             <p className="text-gray-500 text-sm">No urgent tasks</p>
           ) : (
             <div className="space-y-2">
-              {urgentTasks.slice(0, 3).map(task => (
-                <div key={task.id} className="flex items-center space-x-2">
-                  <motion.div 
-                    className="w-3 h-3 bg-red-600 rounded-full"
-                    animate={{ scale: [1, 1.3, 1] }}
-                    transition={{ duration: 0.8, repeat: Infinity }}
-                  />
-                  <span className="text-sm text-red-600 font-medium truncate">{task.title}</span>
-                </div>
-              ))}
+              {urgentTasks.slice(0, 3).map(task => {
+                const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+                
+                return (
+                  <div 
+                    key={task.id} 
+                    className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
+                    onClick={() => handleTaskClick(task.id)}
+                  >
+                    <motion.div
+                      className="w-3 h-3 bg-red-600 rounded-full mt-1.5"
+                      animate={{ scale: [1, 1.3, 1] }}
+                      transition={{ duration: 0.8, repeat: Infinity }}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm text-red-600 font-medium truncate block">{task.title}</span>
+                      {linkedProject && (
+                        <div className="flex items-center mt-1">
+                          <SafeIcon icon={FiBriefcase} className="text-blue-600 text-xs mr-1" />
+                          <span className="text-xs text-blue-600">{linkedProject.title}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               {urgentTasks.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {urgentTasks.length} tasks
@@ -157,12 +197,28 @@ function Dashboard() {
             <p className="text-gray-500 text-sm">No tasks due today</p>
           ) : (
             <div className="space-y-2">
-              {tasksDueToday.slice(0, 3).map(task => (
-                <div key={task.id} className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700 truncate">{task.title}</span>
-                </div>
-              ))}
+              {tasksDueToday.slice(0, 3).map(task => {
+                const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+                
+                return (
+                  <div 
+                    key={task.id} 
+                    className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
+                    onClick={() => handleTaskClick(task.id)}
+                  >
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5"></div>
+                    <div className="flex-1">
+                      <span className="text-sm text-gray-700 truncate block">{task.title}</span>
+                      {linkedProject && (
+                        <div className="flex items-center mt-1">
+                          <SafeIcon icon={FiBriefcase} className="text-blue-600 text-xs mr-1" />
+                          <span className="text-xs text-blue-600">{linkedProject.title}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               {tasksDueToday.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {tasksDueToday.length} tasks
@@ -187,12 +243,28 @@ function Dashboard() {
             <p className="text-gray-500 text-sm">No overdue tasks</p>
           ) : (
             <div className="space-y-2">
-              {overdueTasks.slice(0, 3).map(task => (
-                <div key={task.id} className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-gray-700 truncate">{task.title}</span>
-                </div>
-              ))}
+              {overdueTasks.slice(0, 3).map(task => {
+                const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+                
+                return (
+                  <div 
+                    key={task.id} 
+                    className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
+                    onClick={() => handleTaskClick(task.id)}
+                  >
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mt-1.5"></div>
+                    <div className="flex-1">
+                      <span className="text-sm text-gray-700 truncate block">{task.title}</span>
+                      {linkedProject && (
+                        <div className="flex items-center mt-1">
+                          <SafeIcon icon={FiBriefcase} className="text-blue-600 text-xs mr-1" />
+                          <span className="text-xs text-blue-600">{linkedProject.title}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               {overdueTasks.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {overdueTasks.length} tasks
@@ -217,12 +289,28 @@ function Dashboard() {
             <p className="text-gray-500 text-sm">No high priority tasks</p>
           ) : (
             <div className="space-y-2">
-              {highPriorityTasks.slice(0, 3).map(task => (
-                <div key={task.id} className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700 truncate">{task.title}</span>
-                </div>
-              ))}
+              {highPriorityTasks.slice(0, 3).map(task => {
+                const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
+                
+                return (
+                  <div 
+                    key={task.id} 
+                    className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
+                    onClick={() => handleTaskClick(task.id)}
+                  >
+                    <div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5"></div>
+                    <div className="flex-1">
+                      <span className="text-sm text-gray-700 truncate block">{task.title}</span>
+                      {linkedProject && (
+                        <div className="flex items-center mt-1">
+                          <SafeIcon icon={FiBriefcase} className="text-blue-600 text-xs mr-1" />
+                          <span className="text-xs text-blue-600">{linkedProject.title}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               {highPriorityTasks.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {highPriorityTasks.length} tasks
@@ -235,9 +323,13 @@ function Dashboard() {
 
       {/* Task Modal */}
       {showTaskModal && (
-        <TaskModal
-          onClose={() => setShowTaskModal(false)}
-          onSave={handleCreateTask}
+        <TaskModal 
+          task={selectedTask} 
+          onClose={() => {
+            setShowTaskModal(false);
+            setSelectedTask(null);
+          }} 
+          onSave={selectedTask ? handleUpdateTask : handleCreateTask} 
         />
       )}
     </div>
