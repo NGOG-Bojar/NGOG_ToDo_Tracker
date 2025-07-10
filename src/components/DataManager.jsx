@@ -5,6 +5,7 @@ import * as FiIcons from 'react-icons/fi';
 import { useTask } from '../contexts/TaskContext';
 import { useCategory } from '../contexts/CategoryContext';
 import { useProject } from '../contexts/ProjectContext';
+import { useActivityLogCategory } from '../contexts/ActivityLogCategoryContext';
 import { format } from 'date-fns';
 
 const { FiDownload, FiUpload, FiFileText, FiAlertTriangle, FiCheck, FiX } = FiIcons;
@@ -17,6 +18,7 @@ function DataManager({ isOpen, onClose }) {
   const { tasks } = useTask();
   const { categories } = useCategory();
   const { projects } = useProject();
+  const { activityLogCategories } = useActivityLogCategory();
 
   const exportData = () => {
     try {
@@ -28,7 +30,8 @@ function DataManager({ isOpen, onClose }) {
         data: {
           tasks: tasks,
           categories: categories,
-          projects: projects, // Include projects in export
+          projects: projects,
+          activityLogCategories: activityLogCategories, // Include activity log categories
           // Include any other settings or data
           settings: {
             theme: localStorage.getItem('todoTheme') || 'default',
@@ -44,7 +47,9 @@ function DataManager({ isOpen, onClose }) {
           totalProjects: projects.length,
           activeProjects: projects.filter(p => p.status === 'active').length,
           completedProjects: projects.filter(p => p.status === 'completed').length,
-          projectsWithTasks: projects.filter(p => p.linkedTasks && p.linkedTasks.length > 0).length
+          projectsWithTasks: projects.filter(p => p.linkedTasks && p.linkedTasks.length > 0).length,
+          totalActivityLogCategories: activityLogCategories.length,
+          customActivityLogCategories: activityLogCategories.filter(c => !c.predefined).length
         }
       };
 
@@ -83,7 +88,7 @@ function DataManager({ isOpen, onClose }) {
       try {
         const importData = JSON.parse(e.target.result);
         
-        // Validate file structure - now including projects
+        // Validate file structure - now including projects and activity log categories
         if (!importData.data || !importData.data.tasks || !importData.data.categories) {
           throw new Error('Invalid backup file format');
         }
@@ -115,7 +120,8 @@ function DataManager({ isOpen, onClose }) {
       // Clear existing data and import new data
       localStorage.removeItem('todoTasks');
       localStorage.removeItem('todoCategories');
-      localStorage.removeItem('todoProjects'); // Clear projects
+      localStorage.removeItem('todoProjects');
+      localStorage.removeItem('todoActivityLogCategories'); // Clear activity log categories
 
       // Import tasks
       if (data.tasks && Array.isArray(data.tasks)) {
@@ -130,6 +136,11 @@ function DataManager({ isOpen, onClose }) {
       // Import projects
       if (data.projects && Array.isArray(data.projects)) {
         localStorage.setItem('todoProjects', JSON.stringify(data.projects));
+      }
+
+      // Import activity log categories
+      if (data.activityLogCategories && Array.isArray(data.activityLogCategories)) {
+        localStorage.setItem('todoActivityLogCategories', JSON.stringify(data.activityLogCategories));
       }
 
       // Import settings
@@ -206,7 +217,7 @@ function DataManager({ isOpen, onClose }) {
             <div className="space-y-3">
               <h3 className="text-lg font-medium text-gray-900">Export Data</h3>
               <p className="text-sm text-gray-600">
-                Download a backup file containing all your tasks, categories, projects, and settings.
+                Download a backup file containing all your tasks, categories, projects, activity log categories, and settings.
               </p>
               <button
                 onClick={exportData}
@@ -260,12 +271,12 @@ function DataManager({ isOpen, onClose }) {
                   <span className="ml-2 font-medium">{projects.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Completed:</span>
-                  <span className="ml-2 font-medium">{tasks.filter(t => t.status === 'completed').length}</span>
+                  <span className="text-gray-600">Activity Categories:</span>
+                  <span className="ml-2 font-medium">{activityLogCategories.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Open Tasks:</span>
-                  <span className="ml-2 font-medium">{tasks.filter(t => t.status === 'open').length}</span>
+                  <span className="text-gray-600">Completed:</span>
+                  <span className="ml-2 font-medium">{tasks.filter(t => t.status === 'completed').length}</span>
                 </div>
                 <div>
                   <span className="text-gray-600">Active Projects:</span>
@@ -332,6 +343,7 @@ function DataManager({ isOpen, onClose }) {
                         <div>Tasks: {pendingImportData.metadata?.totalTasks || 0}</div>
                         <div>Categories: {pendingImportData.metadata?.totalCategories || 0}</div>
                         <div>Projects: {pendingImportData.metadata?.totalProjects || 0}</div>
+                        <div>Activity Categories: {pendingImportData.metadata?.totalActivityLogCategories || 0}</div>
                         <div>
                           Export Date: {
                             pendingImportData.exportDate

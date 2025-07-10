@@ -13,6 +13,7 @@ import PasswordProtection from './components/PasswordProtection';
 import { TaskProvider } from './contexts/TaskContext';
 import { CategoryProvider } from './contexts/CategoryContext';
 import { ProjectProvider } from './contexts/ProjectContext';
+import { ActivityLogCategoryProvider } from './contexts/ActivityLogCategoryContext';
 import './App.css';
 
 function App() {
@@ -37,28 +38,30 @@ function App() {
       <TaskProvider>
         <CategoryProvider>
           <ProjectProvider>
-            <div className="min-h-screen bg-gray-50">
-              <Header onLogout={handleLogout} />
-              <NotificationBanner 
-                show={showNotification} 
-                onClose={() => setShowNotification(false)} 
-              />
-              <motion.main
-                className="container mx-auto px-4 py-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/overview" element={<CategoryOverview />} />
-                  <Route path="/tasks" element={<TaskList />} />
-                  <Route path="/projects" element={<ProjectsCooperations />} />
-                  <Route path="/archive" element={<TaskArchive />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Routes>
-              </motion.main>
-            </div>
+            <ActivityLogCategoryProvider>
+              <div className="min-h-screen bg-gray-50">
+                <Header onLogout={handleLogout} />
+                <NotificationBanner
+                  show={showNotification}
+                  onClose={() => setShowNotification(false)}
+                />
+                <motion.main
+                  className="container mx-auto px-4 py-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/overview" element={<CategoryOverview />} />
+                    <Route path="/tasks" element={<TaskList />} />
+                    <Route path="/projects" element={<ProjectsCooperations />} />
+                    <Route path="/archive" element={<TaskArchive />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </Routes>
+                </motion.main>
+              </div>
+            </ActivityLogCategoryProvider>
           </ProjectProvider>
         </CategoryProvider>
       </TaskProvider>

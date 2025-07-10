@@ -5,18 +5,29 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useProject } from '../contexts/ProjectContext';
 import { useTask } from '../contexts/TaskContext';
+import { useActivityLogCategory } from '../contexts/ActivityLogCategoryContext';
 import TaskModal from './TaskModal';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import DOMPurify from 'dompurify';
 
-const { FiX, FiPlus, FiUser, FiMail, FiPhone, FiLink, FiUnlink, FiMessageSquare, FiCalendar, FiActivity, FiEdit3 } = FiIcons;
+const { 
+  FiX, FiPlus, FiUser, FiMail, FiPhone, FiLink, FiUnlink, FiMessageSquare, 
+  FiCalendar, FiActivity, FiEdit3, FiTrash2, FiTag
+} = FiIcons;
 
 function ProjectDetailsModal({ project, onClose, onEdit }) {
-  const { STATUS_COLORS, addActivityLog, linkTaskToProject, unlinkTaskFromProject } = useProject();
+  const { STATUS_COLORS, addActivityLog, linkTaskToProject, unlinkTaskFromProject, deleteActivityLog } = useProject();
   const { tasks, addTask } = useTask();
+  const { getActiveActivityLogCategories, getActivityLogCategoryById } = useActivityLogCategory();
   const [activeTab, setActiveTab] = useState('overview');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showActivityForm, setShowActivityForm] = useState(false);
   const [activityMessage, setActivityMessage] = useState('');
+  const [activityCategory, setActivityCategory] = useState('general');
   const [showLinkTaskModal, setShowLinkTaskModal] = useState(false);
+
+  const activeActivityLogCategories = getActiveActivityLogCategories();
 
   if (!project) return null;
 
@@ -41,9 +52,13 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
   );
 
   const handleCreateTask = (taskData) => {
+    // Create the task and get the returned task object
     const newTask = addTask(taskData);
-    // Link the new task to the project
-    linkTaskToProject(project.id, newTask.id || Date.now(), taskData.title);
+    
+    // Link the new task to the project using the returned task's ID
+    linkTaskToProject(project.id, newTask.id, taskData.title);
+    
+    // Close the modal
     setShowTaskModal(false);
   };
 
@@ -54,11 +69,18 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     addActivityLog(project.id, {
       type: 'manual',
       message: activityMessage.trim(),
-      auto: false
+      auto: false,
+      category: activityCategory
     });
-
     setActivityMessage('');
+    setActivityCategory('general');
     setShowActivityForm(false);
+  };
+
+  const handleDeleteActivity = (entryId) => {
+    if (window.confirm('Are you sure you want to delete this activity log entry?')) {
+      deleteActivityLog(project.id, entryId);
+    }
   };
 
   const handleLinkTask = (taskId) => {
@@ -75,6 +97,22 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
       unlinkTaskFromProject(project.id, taskId, task.title);
     }
   };
+
+  // Rich text editor modules configuration
+  const modules = {
+    toolbar: [
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'header': [1, 2, 3, false] }],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      ['link'],
+      ['clean']
+    ],
+  };
+
+  const formats = [
+    'bold', 'italic', 'underline', 'strike',
+    'header', 'list', 'bullet', 'link'
+  ];
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FiActivity },
@@ -102,13 +140,13 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center space-x-3">
-              <div
-                className="w-6 h-6 rounded-full"
-                style={{ backgroundColor: project.color || '#3B82F6' }}
+              <div 
+                className="w-6 h-6 rounded-full" 
+                style={{ backgroundColor: project.color || '#3B82F6' }} 
               />
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">{project.title}</h2>
-                <span
+                <span 
                   className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white mt-1"
                   style={{ backgroundColor: STATUS_COLORS[project.status] || '#6B7280' }}
                 >
@@ -247,7 +285,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                     </button>
                   </div>
                 </div>
-                
                 {linkedTasks.length > 0 ? (
                   <div className="space-y-3">
                     {linkedTasks.map((task) => (
@@ -258,7 +295,9 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                           }`} />
                           <div>
                             <h4 className={`font-medium ${
-                              task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
+                              task.status === 'completed' 
+                                ? 'line-through text-gray-500' 
+                                : 'text-gray-900'
                             }`}>
                               {task.title}
                             </h4>
@@ -297,20 +336,48 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
 
                 {showActivityForm && (
                   <form onSubmit={handleAddActivity} className="bg-gray-50 rounded-lg p-4">
-                    <textarea
-                      value={activityMessage}
-                      onChange={(e) => setActivityMessage(e.target.value)}
-                      placeholder="Add a project update or milestone..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-                      rows={3}
-                      required
-                    />
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Category
+                        </label>
+                        <select
+                          value={activityCategory}
+                          onChange={(e) => setActivityCategory(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {activeActivityLogCategories.map(category => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Message
+                        </label>
+                        <div className="rich-text-editor">
+                          <ReactQuill
+                            theme="snow"
+                            value={activityMessage}
+                            onChange={setActivityMessage}
+                            modules={modules}
+                            formats={formats}
+                            className="bg-white rounded-md"
+                            style={{ height: '120px', marginBottom: '40px' }}
+                            placeholder="Add a project update, milestone, or note..."
+                          />
+                        </div>
+                      </div>
+                    </div>
                     <div className="flex justify-end space-x-2">
                       <button
                         type="button"
                         onClick={() => {
                           setShowActivityForm(false);
                           setActivityMessage('');
+                          setActivityCategory('general');
                         }}
                         className="px-3 py-1 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
                       >
@@ -330,18 +397,47 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                   {project.activityLog && project.activityLog.length > 0 ? (
                     project.activityLog
                       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                      .map((entry) => (
-                        <div key={entry.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                          <SafeIcon icon={FiCalendar} className="text-gray-400 mt-1" />
-                          <div className="flex-1">
-                            <p className="text-sm text-gray-900">{entry.message}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {format(parseISO(entry.timestamp), 'MMM dd, yyyy HH:mm')}
-                              {entry.auto && ' • Auto-generated'}
-                            </p>
+                      .map((entry) => {
+                        const category = getActivityLogCategoryById(entry.category || 'general');
+                        const sanitizedMessage = entry.message ? DOMPurify.sanitize(entry.message) : '';
+                        
+                        return (
+                          <div key={entry.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center space-x-2">
+                              <SafeIcon icon={FiCalendar} className="text-gray-400 mt-1" />
+                              {category && (
+                                <span
+                                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                  style={{ backgroundColor: category.color }}
+                                >
+                                  <SafeIcon icon={FiTag} className="mr-1 text-xs" />
+                                  {category.name}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div 
+                                className="text-sm text-gray-900 rich-text-content"
+                                dangerouslySetInnerHTML={{ __html: sanitizedMessage }}
+                              />
+                              <div className="flex items-center justify-between mt-1">
+                                <p className="text-xs text-gray-500">
+                                  {format(parseISO(entry.timestamp), 'MMM dd, yyyy HH:mm')}
+                                  {entry.auto && ' • Auto-generated'}
+                                </p>
+                                {!entry.auto && (
+                                  <button
+                                    onClick={() => handleDeleteActivity(entry.id)}
+                                    className="text-red-600 hover:text-red-700 text-xs"
+                                  >
+                                    <SafeIcon icon={FiTrash2} className="text-xs" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                   ) : (
                     <p className="text-gray-500 text-center py-8">No activity log entries yet.</p>
                   )}

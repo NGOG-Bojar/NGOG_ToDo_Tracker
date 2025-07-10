@@ -29,7 +29,6 @@ function projectReducer(state, action) {
   switch (action.type) {
     case 'LOAD_PROJECTS':
       return { ...state, projects: action.payload };
-    
     case 'ADD_PROJECT':
       return {
         ...state,
@@ -45,12 +44,12 @@ function projectReducer(state, action) {
               type: 'created',
               message: 'Project created',
               timestamp: new Date().toISOString(),
-              auto: true
+              auto: true,
+              category: 'general'
             }]
           }
         ]
       };
-    
     case 'UPDATE_PROJECT':
       return {
         ...state,
@@ -61,7 +60,7 @@ function projectReducer(state, action) {
               ...action.payload.updates,
               updatedAt: new Date().toISOString()
             };
-            
+
             // Add activity log entry for status changes
             if (action.payload.updates.status && action.payload.updates.status !== project.status) {
               const statusChangeEntry = {
@@ -69,23 +68,22 @@ function projectReducer(state, action) {
                 type: 'status_change',
                 message: `Status changed from ${project.status} to ${action.payload.updates.status}`,
                 timestamp: new Date().toISOString(),
-                auto: true
+                auto: true,
+                category: 'update'
               };
               updatedProject.activityLog = [...(project.activityLog || []), statusChangeEntry];
             }
-            
+
             return updatedProject;
           }
           return project;
         })
       };
-    
     case 'DELETE_PROJECT':
       return {
         ...state,
         projects: state.projects.filter(project => project.id !== action.payload)
       };
-    
     case 'ADD_ACTIVITY_LOG':
       return {
         ...state,
@@ -106,7 +104,21 @@ function projectReducer(state, action) {
           return project;
         })
       };
-    
+    case 'DELETE_ACTIVITY_LOG':
+      return {
+        ...state,
+        projects: state.projects.map(project => {
+          if (project.id === action.payload.projectId) {
+            return {
+              ...project,
+              activityLog: (project.activityLog || []).filter(entry => 
+                entry.id !== action.payload.entryId
+              )
+            };
+          }
+          return project;
+        })
+      };
     case 'LINK_TASK_TO_PROJECT':
       return {
         ...state,
@@ -124,7 +136,8 @@ function projectReducer(state, action) {
                     type: 'task_linked',
                     message: `Task "${action.payload.taskTitle}" linked to project`,
                     timestamp: new Date().toISOString(),
-                    auto: true
+                    auto: true,
+                    category: 'update'
                   }
                 ]
               };
@@ -133,7 +146,6 @@ function projectReducer(state, action) {
           return project;
         })
       };
-    
     case 'UNLINK_TASK_FROM_PROJECT':
       return {
         ...state,
@@ -141,7 +153,9 @@ function projectReducer(state, action) {
           if (project.id === action.payload.projectId) {
             return {
               ...project,
-              linkedTasks: (project.linkedTasks || []).filter(taskId => taskId !== action.payload.taskId),
+              linkedTasks: (project.linkedTasks || []).filter(taskId => 
+                taskId !== action.payload.taskId
+              ),
               activityLog: [
                 ...(project.activityLog || []),
                 {
@@ -149,7 +163,8 @@ function projectReducer(state, action) {
                   type: 'task_unlinked',
                   message: `Task "${action.payload.taskTitle}" unlinked from project`,
                   timestamp: new Date().toISOString(),
-                  auto: true
+                  auto: true,
+                  category: 'update'
                 }
               ]
             };
@@ -157,7 +172,6 @@ function projectReducer(state, action) {
           return project;
         })
       };
-    
     default:
       return state;
   }
@@ -195,6 +209,10 @@ export function ProjectProvider({ children }) {
     dispatch({ type: 'ADD_ACTIVITY_LOG', payload: { projectId, entry } });
   };
 
+  const deleteActivityLog = (projectId, entryId) => {
+    dispatch({ type: 'DELETE_ACTIVITY_LOG', payload: { projectId, entryId } });
+  };
+
   const linkTaskToProject = (projectId, taskId, taskTitle) => {
     dispatch({ type: 'LINK_TASK_TO_PROJECT', payload: { projectId, taskId, taskTitle } });
   };
@@ -217,6 +235,7 @@ export function ProjectProvider({ children }) {
     updateProject,
     deleteProject,
     addActivityLog,
+    deleteActivityLog,
     linkTaskToProject,
     unlinkTaskFromProject,
     getProjectById,

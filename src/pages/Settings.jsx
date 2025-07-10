@@ -3,14 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import CategoryManager from './CategoryManager';
+import ActivityLogCategoryManager from './ActivityLogCategoryManager';
 import DataManager from '../components/DataManager';
 
-const { FiSettings, FiLock, FiTag, FiDatabase, FiEye, FiEyeOff, FiCheck, FiX, FiKey, FiShield } = FiIcons;
+const { FiSettings, FiLock, FiTag, FiDatabase, FiEye, FiEyeOff, FiCheck, FiX, FiKey, FiShield, FiMessageSquare } = FiIcons;
 
 function Settings() {
   const [activeTab, setActiveTab] = useState('password');
   const [showDataManager, setShowDataManager] = useState(false);
-  
+
   // Password change form state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -67,12 +68,11 @@ function Settings() {
     // Save new password
     localStorage.setItem('todoAppPassword', newPassword);
     setPasswordSuccess('Password changed successfully!');
-    
+
     // Clear form
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    
     setIsChangingPassword(false);
 
     // Clear success message after 3 seconds
@@ -88,7 +88,8 @@ function Settings() {
 
   const tabs = [
     { id: 'password', label: 'Password', icon: FiLock },
-    { id: 'categories', label: 'Categories', icon: FiTag },
+    { id: 'categories', label: 'Task Categories', icon: FiTag },
+    { id: 'activityCategories', label: 'Activity Categories', icon: FiMessageSquare },
     { id: 'data', label: 'Data Management', icon: FiDatabase }
   ];
 
@@ -154,10 +155,7 @@ function Settings() {
                         Current Password
                       </label>
                       <div className="relative">
-                        <SafeIcon 
-                          icon={FiLock} 
-                          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
-                        />
+                        <SafeIcon icon={FiLock} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                         <input
                           type={showCurrentPassword ? 'text' : 'password'}
                           value={currentPassword}
@@ -187,10 +185,7 @@ function Settings() {
                         New Password
                       </label>
                       <div className="relative">
-                        <SafeIcon 
-                          icon={FiKey} 
-                          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
-                        />
+                        <SafeIcon icon={FiKey} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                         <input
                           type={showNewPassword ? 'text' : 'password'}
                           value={newPassword}
@@ -221,10 +216,7 @@ function Settings() {
                         Confirm New Password
                       </label>
                       <div className="relative">
-                        <SafeIcon 
-                          icon={FiKey} 
-                          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
-                        />
+                        <SafeIcon icon={FiKey} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                         <input
                           type={showConfirmPassword ? 'text' : 'password'}
                           value={confirmPassword}
@@ -261,7 +253,6 @@ function Settings() {
                           <span className="text-sm">{passwordError}</span>
                         </motion.div>
                       )}
-                      
                       {passwordSuccess && (
                         <motion.div
                           initial={{ opacity: 0, y: -10 }}
@@ -324,6 +315,18 @@ function Settings() {
               </motion.div>
             )}
 
+            {activeTab === 'activityCategories' && (
+              <motion.div
+                key="activityCategories"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ActivityLogCategoryManager />
+              </motion.div>
+            )}
+
             {activeTab === 'data' && (
               <motion.div
                 key="data"
@@ -339,10 +342,9 @@ function Settings() {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">Data Management</h3>
-                      <p className="text-sm text-gray-600">Export and import your tasks and categories</p>
+                      <p className="text-sm text-gray-600">Export and import your tasks, categories, and projects</p>
                     </div>
                   </div>
-
                   <button
                     onClick={() => setShowDataManager(true)}
                     className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -358,9 +360,9 @@ function Settings() {
       </div>
 
       {/* Data Manager Modal */}
-      <DataManager 
-        isOpen={showDataManager} 
-        onClose={() => setShowDataManager(false)} 
+      <DataManager
+        isOpen={showDataManager}
+        onClose={() => setShowDataManager(false)}
       />
     </div>
   );

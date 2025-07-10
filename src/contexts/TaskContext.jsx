@@ -19,17 +19,15 @@ function taskReducer(state, action) {
     case 'LOAD_TASKS':
       return { ...state, tasks: action.payload };
     case 'ADD_TASK':
+      const newTask = {
+        ...action.payload.taskData,
+        id: action.payload.id || uuidv4(),
+        createdAt: new Date().toISOString(),
+        status: 'open'
+      };
       return {
         ...state,
-        tasks: [
-          ...state.tasks,
-          {
-            ...action.payload,
-            id: uuidv4(),
-            createdAt: new Date().toISOString(),
-            status: 'open'
-          }
-        ]
+        tasks: [...state.tasks, newTask]
       };
     case 'UPDATE_TASK':
       return {
@@ -67,7 +65,10 @@ function taskReducer(state, action) {
         sortOrder: action.payload.sortOrder
       };
     case 'SET_FILTER':
-      return { ...state, [action.payload.type]: action.payload.value };
+      return {
+        ...state,
+        [action.payload.type]: action.payload.value
+      };
     default:
       return state;
   }
@@ -89,8 +90,19 @@ export function TaskProvider({ children }) {
     localStorage.setItem('todoTasks', JSON.stringify(state.tasks));
   }, [state.tasks]);
 
-  const addTask = (task) => {
-    dispatch({ type: 'ADD_TASK', payload: task });
+  const addTask = (taskData) => {
+    const taskId = uuidv4();
+    dispatch({ 
+      type: 'ADD_TASK', 
+      payload: { taskData, id: taskId } 
+    });
+    // Return the task object with the generated ID
+    return {
+      ...taskData,
+      id: taskId,
+      createdAt: new Date().toISOString(),
+      status: 'open'
+    };
   };
 
   const updateTask = (id, updates) => {
