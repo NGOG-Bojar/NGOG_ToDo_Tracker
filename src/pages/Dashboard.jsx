@@ -7,15 +7,25 @@ import { useTask } from '../contexts/TaskContext';
 import { useProject } from '../contexts/ProjectContext';
 import TaskModal from '../components/TaskModal';
 import TaskCompletionStats from '../components/TaskCompletionStats';
+import EventDashboardWidget from '../components/events/EventDashboardWidget';
 
 const { FiPlus, FiCheckCircle, FiClock, FiAlertTriangle, FiList, FiZap, FiBriefcase } = FiIcons;
 
 function Dashboard() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const { tasks, addTask, updateTask, getOverdueTasks, getTasksDueToday, getUrgentTasks, getHighPriorityTasks } = useTask();
+
+  const { 
+    tasks, 
+    addTask, 
+    updateTask, 
+    getOverdueTasks, 
+    getTasksDueToday, 
+    getUrgentTasks, 
+    getHighPriorityTasks 
+  } = useTask();
   const { linkTaskToProject, getProjectById } = useProject();
-  
+
   const overdueTasks = getOverdueTasks();
   const tasksDueToday = getTasksDueToday();
   const urgentTasks = getUrgentTasks();
@@ -24,57 +34,30 @@ function Dashboard() {
   const openTasks = tasks.filter(task => task.status === 'open');
 
   const stats = [
-    {
-      label: 'Total Tasks',
-      value: tasks.length,
-      icon: FiList,
-      color: 'bg-blue-500',
-      textColor: 'text-blue-600'
-    },
-    {
-      label: 'Open Tasks',
-      value: openTasks.length,
-      icon: FiClock,
-      color: 'bg-yellow-500',
-      textColor: 'text-yellow-600'
-    },
-    {
-      label: 'Completed',
-      value: completedTasks.length,
-      icon: FiCheckCircle,
-      color: 'bg-green-500',
-      textColor: 'text-green-600'
-    },
-    {
-      label: 'Overdue',
-      value: overdueTasks.length,
-      icon: FiAlertTriangle,
-      color: 'bg-red-500',
-      textColor: 'text-red-600'
-    }
+    { label: 'Total Tasks', value: tasks.length, icon: FiList, color: 'bg-blue-500', textColor: 'text-blue-600' },
+    { label: 'Open Tasks', value: openTasks.length, icon: FiClock, color: 'bg-yellow-500', textColor: 'text-yellow-600' },
+    { label: 'Completed', value: completedTasks.length, icon: FiCheckCircle, color: 'bg-green-500', textColor: 'text-green-600' },
+    { label: 'Overdue', value: overdueTasks.length, icon: FiAlertTriangle, color: 'bg-red-500', textColor: 'text-red-600' }
   ];
 
   const handleCreateTask = (taskData) => {
     const newTask = addTask(taskData);
-    
     // Explicitly handle project linking - this ensures the project's linkedTasks array is updated
     if (newTask && taskData.linkedProject) {
       linkTaskToProject(taskData.linkedProject, newTask.id, newTask.title);
     }
-    
     setShowTaskModal(false);
     setSelectedTask(null);
-    
     // Return the new task so the modal handler can use it
     return newTask;
   };
-  
+
   const handleUpdateTask = (id, updates) => {
     updateTask(id, updates);
     setSelectedTask(null);
     setShowTaskModal(false);
   };
-  
+
   // Handler for clicking on a task in the priority sections
   const handleTaskClick = (taskId) => {
     const task = tasks.find(t => t.id === taskId);
@@ -127,8 +110,18 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* Task Completion Stats */}
-      <TaskCompletionStats />
+      {/* Event Widget and Task/Project Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Event Widget */}
+        <div className="lg:col-span-1">
+          <EventDashboardWidget />
+        </div>
+        
+        {/* Task Stats */}
+        <div className="lg:col-span-2">
+          <TaskCompletionStats />
+        </div>
+      </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -143,16 +136,16 @@ function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Urgent</h3>
             <SafeIcon icon={FiZap} className="text-red-600 text-xl" />
           </div>
+          
           {urgentTasks.length === 0 ? (
             <p className="text-gray-500 text-sm">No urgent tasks</p>
           ) : (
             <div className="space-y-2">
               {urgentTasks.slice(0, 3).map(task => {
                 const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
-                
                 return (
-                  <div 
-                    key={task.id} 
+                  <div
+                    key={task.id}
                     className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
                     onClick={() => handleTaskClick(task.id)}
                   >
@@ -173,6 +166,7 @@ function Dashboard() {
                   </div>
                 );
               })}
+              
               {urgentTasks.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {urgentTasks.length} tasks
@@ -193,16 +187,16 @@ function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Due Today</h3>
             <SafeIcon icon={FiClock} className="text-yellow-500 text-xl" />
           </div>
+          
           {tasksDueToday.length === 0 ? (
             <p className="text-gray-500 text-sm">No tasks due today</p>
           ) : (
             <div className="space-y-2">
               {tasksDueToday.slice(0, 3).map(task => {
                 const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
-                
                 return (
-                  <div 
-                    key={task.id} 
+                  <div
+                    key={task.id}
                     className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
                     onClick={() => handleTaskClick(task.id)}
                   >
@@ -219,6 +213,7 @@ function Dashboard() {
                   </div>
                 );
               })}
+              
               {tasksDueToday.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {tasksDueToday.length} tasks
@@ -239,16 +234,16 @@ function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Overdue</h3>
             <SafeIcon icon={FiAlertTriangle} className="text-red-500 text-xl" />
           </div>
+          
           {overdueTasks.length === 0 ? (
             <p className="text-gray-500 text-sm">No overdue tasks</p>
           ) : (
             <div className="space-y-2">
               {overdueTasks.slice(0, 3).map(task => {
                 const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
-                
                 return (
-                  <div 
-                    key={task.id} 
+                  <div
+                    key={task.id}
                     className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
                     onClick={() => handleTaskClick(task.id)}
                   >
@@ -265,6 +260,7 @@ function Dashboard() {
                   </div>
                 );
               })}
+              
               {overdueTasks.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {overdueTasks.length} tasks
@@ -285,16 +281,16 @@ function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">High Priority</h3>
             <SafeIcon icon={FiAlertTriangle} className="text-orange-500 text-xl" />
           </div>
+          
           {highPriorityTasks.length === 0 ? (
             <p className="text-gray-500 text-sm">No high priority tasks</p>
           ) : (
             <div className="space-y-2">
               {highPriorityTasks.slice(0, 3).map(task => {
                 const linkedProject = task.linkedProject ? getProjectById(task.linkedProject) : null;
-                
                 return (
-                  <div 
-                    key={task.id} 
+                  <div
+                    key={task.id}
                     className="flex items-start space-x-2 hover:bg-gray-50 p-1 rounded cursor-pointer"
                     onClick={() => handleTaskClick(task.id)}
                   >
@@ -311,6 +307,7 @@ function Dashboard() {
                   </div>
                 );
               })}
+              
               {highPriorityTasks.length > 3 && (
                 <Link to="/tasks" className="text-blue-600 text-sm hover:underline">
                   View all {highPriorityTasks.length} tasks
@@ -323,13 +320,13 @@ function Dashboard() {
 
       {/* Task Modal */}
       {showTaskModal && (
-        <TaskModal 
-          task={selectedTask} 
+        <TaskModal
+          task={selectedTask}
           onClose={() => {
             setShowTaskModal(false);
             setSelectedTask(null);
-          }} 
-          onSave={selectedTask ? handleUpdateTask : handleCreateTask} 
+          }}
+          onSave={selectedTask ? handleUpdateTask : handleCreateTask}
         />
       )}
     </div>

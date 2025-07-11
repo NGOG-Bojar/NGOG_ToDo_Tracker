@@ -5,11 +5,12 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useProject } from '../contexts/ProjectContext';
 
-const { FiEdit3, FiTrash2, FiUsers, FiLink, FiCalendar, FiActivity } = FiIcons;
+const { FiEdit3, FiTrash2, FiUsers, FiLink, FiCalendar, FiActivity, FiArchive, FiMoreVertical } = FiIcons;
 
-function ProjectCard({ project, onEdit, onDelete, onViewDetails }) {
+function ProjectCard({ project, onEdit, onDelete, onArchive, onViewDetails }) {
+  const [showDropdown, setShowDropdown] = useState(false);
   const { STATUS_COLORS } = useProject();
-  
+
   const getStatusLabel = (status) => {
     const labels = {
       idea: 'Idea',
@@ -40,39 +41,77 @@ function ProjectCard({ project, onEdit, onDelete, onViewDetails }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
+      className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer relative"
       onClick={() => onViewDetails(project)}
     >
       <div className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <div
-              className="w-4 h-4 rounded-full"
-              style={{ backgroundColor: project.color || '#3B82F6' }}
+            <div 
+              className="w-4 h-4 rounded-full" 
+              style={{ backgroundColor: project.color || '#3B82F6' }} 
             />
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {project.title}
             </h3>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="relative">
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit(project);
+                setShowDropdown(!showDropdown);
               }}
-              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
             >
-              <SafeIcon icon={FiEdit3} className="text-sm" />
+              <SafeIcon icon={FiMoreVertical} className="text-sm" />
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(project.id);
-              }}
-              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-            >
-              <SafeIcon icon={FiTrash2} className="text-sm" />
-            </button>
+            
+            {/* Dropdown Menu */}
+            {showDropdown && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10"
+                onMouseLeave={() => setShowDropdown(false)}
+              >
+                <div className="py-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(project);
+                      setShowDropdown(false);
+                    }}
+                    className="flex items-center space-x-2 w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <SafeIcon icon={FiEdit3} className="text-sm" />
+                    <span>Edit Project</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchive(project.id);
+                      setShowDropdown(false);
+                    }}
+                    className="flex items-center space-x-2 w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <SafeIcon icon={FiArchive} className="text-sm" />
+                    <span>Archive Project</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(project.id);
+                      setShowDropdown(false);
+                    }}
+                    className="flex items-center space-x-2 w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <SafeIcon icon={FiTrash2} className="text-sm" />
+                    <span>Delete Project</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
 
@@ -103,7 +142,6 @@ function ProjectCard({ project, onEdit, onDelete, onViewDetails }) {
                 <span>{project.participants.length} participant{project.participants.length > 1 ? 's' : ''}</span>
               </div>
             )}
-            
             {project.linkedTasks && project.linkedTasks.length > 0 && (
               <div className="flex items-center space-x-1">
                 <SafeIcon icon={FiLink} className="text-xs" />
@@ -111,7 +149,6 @@ function ProjectCard({ project, onEdit, onDelete, onViewDetails }) {
               </div>
             )}
           </div>
-          
           <div className="flex items-center space-x-1">
             <SafeIcon icon={FiCalendar} className="text-xs" />
             <span>

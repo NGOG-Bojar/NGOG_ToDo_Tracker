@@ -28,10 +28,8 @@ const STATUS_COLORS = {
 function projectReducer(state, action) {
   switch (action.type) {
     case 'LOAD_PROJECTS':
-      return {
-        ...state,
-        projects: action.payload
-      };
+      return { ...state, projects: action.payload };
+
     case 'ADD_PROJECT':
       return {
         ...state,
@@ -42,6 +40,7 @@ function projectReducer(state, action) {
             ...action.payload,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            archived: false,
             activityLog: [
               {
                 id: uuidv4(),
@@ -55,6 +54,7 @@ function projectReducer(state, action) {
           }
         ]
       };
+
     case 'UPDATE_PROJECT':
       return {
         ...state,
@@ -84,11 +84,67 @@ function projectReducer(state, action) {
           return project;
         })
       };
+
     case 'DELETE_PROJECT':
       return {
         ...state,
         projects: state.projects.filter(project => project.id !== action.payload)
       };
+
+    case 'ARCHIVE_PROJECT':
+      return {
+        ...state,
+        projects: state.projects.map(project => {
+          if (project.id === action.payload) {
+            return {
+              ...project,
+              archived: true,
+              archivedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              activityLog: [
+                ...(project.activityLog || []),
+                {
+                  id: uuidv4(),
+                  type: 'archived',
+                  message: 'Project archived',
+                  timestamp: new Date().toISOString(),
+                  auto: true,
+                  category: 'general'
+                }
+              ]
+            };
+          }
+          return project;
+        })
+      };
+
+    case 'RESTORE_PROJECT':
+      return {
+        ...state,
+        projects: state.projects.map(project => {
+          if (project.id === action.payload) {
+            return {
+              ...project,
+              archived: false,
+              archivedAt: null,
+              updatedAt: new Date().toISOString(),
+              activityLog: [
+                ...(project.activityLog || []),
+                {
+                  id: uuidv4(),
+                  type: 'restored',
+                  message: 'Project restored from archive',
+                  timestamp: new Date().toISOString(),
+                  auto: true,
+                  category: 'general'
+                }
+              ]
+            };
+          }
+          return project;
+        })
+      };
+
     case 'ADD_ACTIVITY_LOG':
       return {
         ...state,
@@ -109,6 +165,7 @@ function projectReducer(state, action) {
           return project;
         })
       };
+
     case 'DELETE_ACTIVITY_LOG':
       return {
         ...state,
@@ -124,6 +181,7 @@ function projectReducer(state, action) {
           return project;
         })
       };
+
     case 'LINK_TASK_TO_PROJECT':
       return {
         ...state,
@@ -151,6 +209,7 @@ function projectReducer(state, action) {
           return project;
         })
       };
+
     case 'UNLINK_TASK_FROM_PROJECT':
       return {
         ...state,
@@ -177,6 +236,7 @@ function projectReducer(state, action) {
           return project;
         })
       };
+
     default:
       return state;
   }
@@ -189,10 +249,7 @@ export function ProjectProvider({ children }) {
   useEffect(() => {
     const savedProjects = localStorage.getItem('todoProjects');
     if (savedProjects) {
-      dispatch({
-        type: 'LOAD_PROJECTS',
-        payload: JSON.parse(savedProjects)
-      });
+      dispatch({ type: 'LOAD_PROJECTS', payload: JSON.parse(savedProjects) });
     }
   }, []);
 
@@ -202,52 +259,39 @@ export function ProjectProvider({ children }) {
   }, [state.projects]);
 
   const addProject = (projectData) => {
-    dispatch({
-      type: 'ADD_PROJECT',
-      payload: projectData
-    });
+    dispatch({ type: 'ADD_PROJECT', payload: projectData });
   };
 
   const updateProject = (id, updates) => {
-    dispatch({
-      type: 'UPDATE_PROJECT',
-      payload: { id, updates }
-    });
+    dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates } });
   };
 
   const deleteProject = (id) => {
-    dispatch({
-      type: 'DELETE_PROJECT',
-      payload: id
-    });
+    dispatch({ type: 'DELETE_PROJECT', payload: id });
+  };
+
+  const archiveProject = (id) => {
+    dispatch({ type: 'ARCHIVE_PROJECT', payload: id });
+  };
+
+  const restoreProject = (id) => {
+    dispatch({ type: 'RESTORE_PROJECT', payload: id });
   };
 
   const addActivityLog = (projectId, entry) => {
-    dispatch({
-      type: 'ADD_ACTIVITY_LOG',
-      payload: { projectId, entry }
-    });
+    dispatch({ type: 'ADD_ACTIVITY_LOG', payload: { projectId, entry } });
   };
 
   const deleteActivityLog = (projectId, entryId) => {
-    dispatch({
-      type: 'DELETE_ACTIVITY_LOG',
-      payload: { projectId, entryId }
-    });
+    dispatch({ type: 'DELETE_ACTIVITY_LOG', payload: { projectId, entryId } });
   };
 
   const linkTaskToProject = (projectId, taskId, taskTitle) => {
-    dispatch({
-      type: 'LINK_TASK_TO_PROJECT',
-      payload: { projectId, taskId, taskTitle }
-    });
+    dispatch({ type: 'LINK_TASK_TO_PROJECT', payload: { projectId, taskId, taskTitle } });
   };
 
   const unlinkTaskFromProject = (projectId, taskId, taskTitle) => {
-    dispatch({
-      type: 'UNLINK_TASK_FROM_PROJECT',
-      payload: { projectId, taskId, taskTitle }
-    });
+    dispatch({ type: 'UNLINK_TASK_FROM_PROJECT', payload: { projectId, taskId, taskTitle } });
   };
 
   const getProjectById = (id) => {
@@ -255,7 +299,15 @@ export function ProjectProvider({ children }) {
   };
 
   const getProjectsByStatus = (status) => {
-    return state.projects.filter(project => project.status === status);
+    return state.projects.filter(project => project.status === status && !project.archived);
+  };
+
+  const getActiveProjects = () => {
+    return state.projects.filter(project => !project.archived);
+  };
+
+  const getArchivedProjects = () => {
+    return state.projects.filter(project => project.archived);
   };
 
   const value = {
@@ -263,12 +315,16 @@ export function ProjectProvider({ children }) {
     addProject,
     updateProject,
     deleteProject,
+    archiveProject,
+    restoreProject,
     addActivityLog,
     deleteActivityLog,
     linkTaskToProject,
     unlinkTaskFromProject,
     getProjectById,
     getProjectsByStatus,
+    getActiveProjects,
+    getArchivedProjects,
     PROJECT_STATUSES,
     STATUS_COLORS
   };

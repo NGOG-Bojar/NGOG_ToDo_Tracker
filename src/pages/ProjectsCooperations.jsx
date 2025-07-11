@@ -7,7 +7,7 @@ import ProjectCard from '../components/ProjectCard';
 import ProjectModal from '../components/ProjectModal';
 import ProjectDetailsModal from '../components/ProjectDetailsModal';
 
-const { FiPlus, FiFilter, FiGrid, FiBriefcase, FiUsers, FiActivity } = FiIcons;
+const { FiPlus, FiFilter, FiGrid, FiBriefcase, FiUsers, FiActivity, FiArchive } = FiIcons;
 
 function ProjectsCooperations() {
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -17,19 +17,23 @@ function ProjectsCooperations() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
 
-  const { 
-    projects, 
-    addProject, 
-    updateProject, 
-    deleteProject, 
+  const {
+    projects,
+    addProject,
+    updateProject,
+    deleteProject,
+    archiveProject,
     getProjectsByStatus,
+    getActiveProjects,
     PROJECT_STATUSES,
-    STATUS_COLORS 
+    STATUS_COLORS
   } = useProject();
 
+  // Get only active (non-archived) projects
+  const activeProjects = getActiveProjects();
   const filteredProjects = filterStatus === 'all' 
-    ? projects 
-    : getProjectsByStatus(filterStatus);
+    ? activeProjects 
+    : activeProjects.filter(project => project.status === filterStatus);
 
   const handleCreateProject = (projectData) => {
     addProject(projectData);
@@ -44,9 +48,16 @@ function ProjectsCooperations() {
   };
 
   const handleDeleteProject = (id) => {
-    const project = projects.find(p => p.id === id);
+    const project = activeProjects.find(p => p.id === id);
     if (window.confirm(`Are you sure you want to delete "${project.title}"?`)) {
       deleteProject(id);
+    }
+  };
+
+  const handleArchiveProject = (id) => {
+    const project = activeProjects.find(p => p.id === id);
+    if (window.confirm(`Are you sure you want to archive "${project.title}"? You can restore it from the Archive section.`)) {
+      archiveProject(id);
     }
   };
 
@@ -75,12 +86,12 @@ function ProjectsCooperations() {
     { value: PROJECT_STATUSES.COMPLETED, label: 'Completed' }
   ];
 
-  // Stats calculation
+  // Stats calculation (only for active projects)
   const stats = {
-    total: projects.length,
-    active: getProjectsByStatus(PROJECT_STATUSES.ACTIVE).length,
-    completed: getProjectsByStatus(PROJECT_STATUSES.COMPLETED).length,
-    waiting: getProjectsByStatus(PROJECT_STATUSES.WAITING).length
+    total: activeProjects.length,
+    active: activeProjects.filter(p => p.status === PROJECT_STATUSES.ACTIVE).length,
+    completed: activeProjects.filter(p => p.status === PROJECT_STATUSES.COMPLETED).length,
+    waiting: activeProjects.filter(p => p.status === PROJECT_STATUSES.WAITING).length
   };
 
   return (
@@ -185,14 +196,12 @@ function ProjectsCooperations() {
                 </option>
               ))}
             </select>
-            
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600">
                 {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
-
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setViewMode('grid')}
@@ -220,9 +229,8 @@ function ProjectsCooperations() {
               <SafeIcon icon={FiBriefcase} className="text-gray-300 text-6xl mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
                 {filterStatus === 'all' 
-                  ? 'No projects found'
-                  : `No projects with status "${statusOptions.find(s => s.value === filterStatus)?.label}"`
-                }
+                  ? 'No projects found' 
+                  : `No projects with status "${statusOptions.find(s => s.value === filterStatus)?.label}"`}
               </p>
               <p className="text-gray-400 text-sm mt-2">
                 Create your first project to get started
@@ -235,6 +243,7 @@ function ProjectsCooperations() {
                 project={project}
                 onEdit={handleEditProject}
                 onDelete={handleDeleteProject}
+                onArchive={handleArchiveProject}
                 onViewDetails={handleViewDetails}
               />
             ))
