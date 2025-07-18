@@ -428,11 +428,15 @@ function Settings() {
                   <div className="bg-blue-50 rounded-lg p-4 mb-6">
                     <h4 className="text-sm font-medium text-blue-900 mb-2">Test Coverage:</h4>
                     <ul className="text-xs text-blue-700 space-y-1">
-                      <li>• Authentication status and session validation</li>
-                      <li>• Database connection and user permissions</li>
-                      <li>• CRUD operations (Create, Read, Update, Delete)</li>
-                      <li>• Offline functionality and sync queue</li>
-                      <li>• Real-time subscriptions and updates</li>
+                      <li>• Environment configuration and setup validation</li>
+                      <li>• Authentication status and session management</li>
+                      <li>• Database connection, schema, and permissions</li>
+                      <li>• Comprehensive CRUD operations for all tables</li>
+                      <li>• Real-time subscriptions and live updates</li>
+                      <li>• Offline functionality and sync queue management</li>
+                      <li>• Data relationships and foreign key constraints</li>
+                      <li>• Performance testing with concurrent operations</li>
+                      <li>• Sync service validation and conflict resolution</li>
                       <li>• Error handling and fallback mechanisms</li>
                     </ul>
                   </div>
