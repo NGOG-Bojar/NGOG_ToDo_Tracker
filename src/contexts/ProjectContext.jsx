@@ -293,19 +293,20 @@ export function ProjectProvider({ children }) {
   const addProject = async (projectData) => {
     try {
       const activityLogId = uuidv4();
+      
+      // Create project without activityLog (it goes in separate table)
       const newProject = await db.create('projects', {
         ...projectData,
-        archived: false,
-        activityLog: [
-          {
-            id: activityLogId,
-            type: 'created',
-            message: 'Project created',
-            timestamp: new Date().toISOString(),
-            auto: true,
-            category: 'general'
-          }
-        ]
+        archived: false
+      });
+      
+      // Create initial activity log entry in separate table
+      await db.create('project_activity_logs', {
+        project_id: newProject.id,
+        type: 'created',
+        message: 'Project created',
+        auto: true,
+        category: 'general'
       });
       
       dispatch({ 
@@ -313,7 +314,18 @@ export function ProjectProvider({ children }) {
         payload: { 
           ...projectData, 
           id: newProject.id,
-          activityLogId 
+          activityLogId,
+          // Include activityLog for local state (UI expects this)
+          activityLog: [
+            {
+              id: activityLogId,
+              type: 'created',
+              message: 'Project created',
+              timestamp: new Date().toISOString(),
+              auto: true,
+              category: 'general'
+            }
+          ]
         } 
       });
       return newProject;
