@@ -44,19 +44,12 @@ function TestIntegration({ onClose }) {
       description: 'Test connection to Supabase',
       test: async () => {
         try {
-          console.log('Testing read operations...');
-          console.log('Testing project creation...');
-          console.log('Testing task creation...');
-          console.log('Testing category creation...');
           console.log('Testing database connection...');
           
           // Test basic Supabase connection
           const { data, error } = await supabase.from('categories').select('count').limit(1);
           console.log('Supabase query result:', { data, error });
           
-          console.log('Category created:', testCategory);
-          console.log('Task created:', testTask);
-          console.log('Project created:', testProject);
           if (error) {
             throw new Error(`Supabase connection failed: ${error.message}`);
           }
@@ -67,31 +60,28 @@ function TestIntegration({ onClose }) {
           const currentUser = await db.getCurrentUser();
           console.log('Current user:', currentUser?.email);
           
+          // Test read operations
+          const tasksData = await db.read('tasks');
+          const categoriesData = await db.read('categories');
+          const projectsData = await db.read('projects');
+          
           console.log('Tasks data:', tasksData);
-          return { 
           console.log('Categories data:', categoriesData);
-            supabaseConnected: !error,
           console.log('Projects data:', projectsData);
+          
+          return { 
+            supabaseConnected: !error,
             authenticated: isAuth, 
             userEmail: currentUser?.email,
             online: navigator.onLine,
             hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-            hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
+            hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+            tasksCount: tasksData.length,
+            categoriesCount: categoriesData.length,
+            projectsCount: projectsData.length
           };
         } catch (error) {
-          console.error('Read operations test error:', error);
-          throw error;
-        } catch (error) {
           console.error('Database connection test error:', error);
-          throw error;
-        } catch (error) {
-          console.error('Category creation test error:', error);
-          throw error;
-        } catch (error) {
-          console.error('Task creation test error:', error);
-          throw error;
-        } catch (error) {
-          console.error('Project creation test error:', error);
           throw error;
         }
       }
