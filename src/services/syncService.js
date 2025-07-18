@@ -76,6 +76,15 @@ class SyncService {
     if (processedOperations.length > 0) {
       this.triggerDataRefresh()
     }
+    
+    // Update last sync time
+    localStorage.setItem('lastSyncTime', new Date().toISOString())
+    
+    return {
+      processed: processedOperations.length,
+      failed: failedOperations.length,
+      total: processedOperations.length + failedOperations.length
+    }
   }
 
   /**
@@ -266,10 +275,80 @@ class SyncService {
       isOnline: this.isOnline,
       queueLength: this.offlineQueue.length,
       syncInProgress: this.syncInProgress,
-      lastSync: localStorage.getItem('lastSyncTime')
+      lastSync: localStorage.getItem('lastSyncTime'),
+      hasConflicts: this.offlineQueue.some(op => op.hasConflict),
+      nextAutoSync: this.getNextAutoSyncTime()
     }
   }
 
+  /**
+   * Get next auto-sync time
+   */
+  getNextAutoSyncTime() {
+    const lastSync = localStorage.getItem('lastSyncTime')
+    if (!lastSync) return null
+    
+    const syncInterval = parseInt(localStorage.getItem('syncInterval') || '30000')
+    return new Date(new Date(lastSync).getTime() + syncInterval)
+  }
+
+  /**
+   * Enable/disable auto-sync
+   */
+  setAutoSync(enabled) {
+    localStorage.setItem('autoSyncEnabled', enabled.toString())
+  }
+
+  /**
+   * Check if auto-sync is enabled
+   */
+  isAutoSyncEnabled() {
+    return localStorage.getItem('autoSyncEnabled') !== 'false'
+  }
+
+  /**
+   * Set sync interval
+   */
+  setSyncInterval(interval) {
+    localStorage.setItem('syncInterval', interval.toString())
+  }
+
+  /**
+   * Get sync statistics
+   */
+  getSyncStats() {
+    return {
+      totalSyncs: parseInt(localStorage.getItem('totalSyncs') || '0'),
+      successfulSyncs: parseInt(localStorage.getItem('successfulSyncs') || '0'),
+      failedSyncs: parseInt(localStorage.getItem('failedSyncs') || '0'),
+      lastSyncDuration: parseInt(localStorage.getItem('lastSyncDuration') || '0'),
+      averageSyncTime: parseInt(localStorage.getItem('averageSyncTime') || '0')
+    }
+  }
+
+  /**
+   * Record sync statistics
+   */
+  recordSyncStats(success, duration) {
+    const stats = this.getSyncStats()
+    
+    stats.totalSyncs++
+    if (success) {
+      stats.successfulSyncs++
+    } else {
+      stats.failedSyncs++
+    }
+    
+    stats.lastSyncDuration = duration
+    stats.averageSyncTime = Math.round(
+      (stats.averageSyncTime * (stats.totalSyncs - 1) + duration) / stats.totalSyncs
+    )
+    
+    // Save updated stats
+    Object.entries(stats).forEach(([key, value]) => {
+      localStorage.setItem(key, value.toString())
+    })
+  }
   /**
    * Manual sync trigger
    */
@@ -278,8 +357,20 @@ class SyncService {
       throw new Error('Cannot sync while offline')
     }
 
-    await this.processPendingOperations()
-    await this.performFullSync()
+    const startTime = Date.now()
+    let success = false
+    
+    try {
+      await this.processPendingOperations()
+      await this.performFullSync()
+      success = true
+    } catch (error) {
+      console.error('Manual sync failed:', error)
+      throw error
+    } finally {
+      const duration = Date.now() - startTime
+      this.recordSyncStats(success, duration)
+    }
     
     localStorage.setItem('lastSyncTime', new Date().toISOString())
   }
