@@ -16,15 +16,14 @@ const {
 } = FiIcons;
 
 function TestIntegration({ onClose }) {
-  const [tests, setTests] = useState([]);
   const [currentTest, setCurrentTest] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState({});
   
   const { user, session } = useAuth();
-  const { addTask, tasks } = useTask();
-  const { addCategory, categories } = useCategory();
-  const { addProject, projects } = useProject();
+  const { addTask } = useTask();
+  const { addCategory } = useCategory();
+  const { addProject } = useProject();
 
   const testSuite = [
     {
@@ -43,47 +42,52 @@ function TestIntegration({ onClose }) {
       name: 'Database Connection',
       description: 'Test connection to Supabase',
       test: async () => {
-        try {
-          console.log('Testing database connection...');
-          
-          // Test basic Supabase connection
-          const { data, error } = await supabase.from('categories').select('count').limit(1);
-          console.log('Supabase query result:', { data, error });
-          
-          if (error) {
-            throw new Error(`Supabase connection failed: ${error.message}`);
-          }
-          
-          const isAuth = await db.isAuthenticated();
-          console.log('Authentication check:', isAuth);
-          
-          const currentUser = await db.getCurrentUser();
-          console.log('Current user:', currentUser?.email);
-          
-          // Test read operations
-          const tasksData = await db.read('tasks');
-          const categoriesData = await db.read('categories');
-          const projectsData = await db.read('projects');
-          
-          console.log('Tasks data:', tasksData);
-          console.log('Categories data:', categoriesData);
-          console.log('Projects data:', projectsData);
-          
-          return { 
-            supabaseConnected: !error,
-            authenticated: isAuth, 
-            userEmail: currentUser?.email,
-            online: navigator.onLine,
-            hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-            hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-            tasksCount: tasksData.length,
-            categoriesCount: categoriesData.length,
-            projectsCount: projectsData.length
-          };
-        } catch (error) {
-          console.error('Database connection test error:', error);
-          throw error;
+        console.log('Testing database connection...');
+        
+        // Test basic Supabase connection with a simple query
+        const { data, error } = await supabase.from('categories').select('count').limit(1);
+        console.log('Supabase query result:', { data, error });
+        
+        if (error) {
+          throw new Error(`Supabase connection failed: ${error.message}`);
         }
+        
+        const isAuth = await db.isAuthenticated();
+        console.log('Authentication check:', isAuth);
+        
+        const currentUser = await db.getCurrentUser();
+        console.log('Current user:', currentUser?.email);
+        
+        return { 
+          supabaseConnected: !error,
+          authenticated: isAuth, 
+          userEmail: currentUser?.email,
+          online: navigator.onLine,
+          hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+          hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
+        };
+      }
+    },
+    {
+      id: 'read-operations',
+      name: 'Read Operations',
+      description: 'Test reading data from database',
+      test: async () => {
+        const tasksData = await db.read('tasks');
+        const categoriesData = await db.read('categories');
+        const projectsData = await db.read('projects');
+        
+        console.log('Read operations results:', {
+          tasks: tasksData.length,
+          categories: categoriesData.length,
+          projects: projectsData.length
+        });
+        
+        return {
+          tasksCount: tasksData.length,
+          categoriesCount: categoriesData.length,
+          projectsCount: projectsData.length
+        };
       }
     },
     {
@@ -133,22 +137,6 @@ function TestIntegration({ onClose }) {
       }
     },
     {
-      id: 'read-operations',
-      name: 'Read Operations',
-      description: 'Test reading data from database',
-      test: async () => {
-        const tasksData = await db.read('tasks');
-        const categoriesData = await db.read('categories');
-        const projectsData = await db.read('projects');
-        
-        return {
-          tasksCount: tasksData.length,
-          categoriesCount: categoriesData.length,
-          projectsCount: projectsData.length
-        };
-      }
-    },
-    {
       id: 'sync-status',
       name: 'Sync Service',
       description: 'Test sync service functionality',
@@ -166,10 +154,6 @@ function TestIntegration({ onClose }) {
       name: 'Offline Mode Test',
       description: 'Test offline functionality',
       test: async () => {
-        // Simulate offline operation
-        const originalOnline = navigator.onLine;
-        
-        // Create offline operation
         const offlineTask = await db.createOffline('tasks', {
           title: 'Offline Test Task',
           description: 'Created while offline',
@@ -179,7 +163,7 @@ function TestIntegration({ onClose }) {
         return {
           offlineTaskId: offlineTask.id,
           hasLocalId: !!offlineTask.local_id,
-          originalOnlineStatus: originalOnline
+          originalOnlineStatus: navigator.onLine
         };
       }
     }
