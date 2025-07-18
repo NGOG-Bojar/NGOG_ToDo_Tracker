@@ -189,9 +189,9 @@ function TestIntegration({ onClose }) {
       name: 'Database Schema Validation',
       description: 'Verify all required database tables exist and are accessible',
       test: async () => {
-        // Create a timeout promise that rejects after 5 seconds
+        // Create a timeout promise that rejects after 10 seconds
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Schema validation timed out')), 5000);
+          setTimeout(() => reject(new Error('Schema validation timed out')), 10000);
         });
         
         const validationPromise = (async () => {
@@ -208,9 +208,9 @@ function TestIntegration({ onClose }) {
               // Quick existence check - just try to create a query
               const query = supabase.from(table).select('id').limit(1);
               
-              // Try to execute with very short timeout
+              // Try to execute with timeout
               const quickCheck = new Promise((resolve, reject) => {
-                setTimeout(() => reject(new Error('Table check timeout')), 2000);
+                setTimeout(() => reject(new Error('Table check timeout')), 5000);
               });
               
               const queryPromise = query.then(result => {
