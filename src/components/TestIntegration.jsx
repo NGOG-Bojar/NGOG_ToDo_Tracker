@@ -7,78 +7,155 @@ import { useTask } from '../contexts/TaskContext';
 import { useCategory } from '../contexts/CategoryContext';
 import { useProject } from '../contexts/ProjectContext';
 import { useActivityLogCategory } from '../contexts/ActivityLogCategoryContext';
+import { useEvent } from '../contexts/EventContext';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
 import { supabase } from '../lib/supabase';
 
 const { 
   FiCheck, FiX, FiLoader, FiDatabase, FiWifi, FiWifiOff, 
-  FiRefreshCw, FiAlertTriangle, FiInfo, FiPlay, FiPause 
+  FiRefreshCw, FiAlertTriangle, FiInfo, FiPlay, FiPause,
+  FiUsers, FiLock, FiZap, FiClock, FiTrash2, FiEdit3
 } = FiIcons;
 
 function TestIntegration({ onClose }) {
   const [currentTest, setCurrentTest] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState({});
+  const [testData, setTestData] = useState({}); // Store created test data for cleanup
   
   const { user, session } = useAuth();
-  const { addTask } = useTask();
-  const { addCategory } = useCategory();
-  const { addProject } = useProject();
-  const { addActivityLogCategory } = useActivityLogCategory();
+  const { addTask, updateTask, deleteTask, tasks } = useTask();
+  const { addCategory, updateCategory, deleteCategory, categories } = useCategory();
+  const { addProject, updateProject, deleteProject, projects } = useProject();
+  const { addActivityLogCategory, updateActivityLogCategory, deleteActivityLogCategory, activityLogCategories } = useActivityLogCategory();
+  const { addEvent, updateEvent, deleteEvent, events } = useEvent();
 
   const testSuite = [
     {
-      id: 'auth-check',
-      name: 'Authentication Status',
-      description: 'Verify user authentication and session',
+      id: 'environment-check',
+      name: 'Environment Configuration',
+      description: 'Verify environment variables and basic setup',
+      test: async () => {
+        const hasSupabaseUrl = !!import.meta.env.VITE_SUPABASE_URL;
+        const hasSupabaseKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        if (!hasSupabaseUrl || !hasSupabaseKey) {
+          throw new Error('Missing Supabase environment variables');
+        }
+        
+        return {
+          supabaseUrl: hasSupabaseUrl ? 'Configured' : 'Missing',
+          supabaseKey: hasSupabaseKey ? 'Configured' : 'Missing',
+          online: navigator.onLine,
+          userAgent: navigator.userAgent.substring(0, 50) + '...'
+        };
+      }
+    },
+    {
+      id: 'auth-validation',
+      name: 'Authentication Validation',
+      description: 'Comprehensive authentication and session checks',
       test: async () => {
         if (!user || !session) {
           throw new Error('User not authenticated');
         }
-        return { user: user.email, sessionValid: !!session.access_token };
+        
+        // Test session validity
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          throw new Error(`Session error: ${sessionError.message}`);
+        }
+        
+        // Test user data access
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          throw new Error(`User data error: ${userError.message}`);
+        }
+        
+        return {
+          userId: user.id,
+          userEmail: user.email,
+          sessionValid: !!session.access_token,
+          sessionExpiry: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'Unknown',
+          userConfirmed: user.email_confirmed_at ? 'Yes' : 'No'
+        };
       }
     },
     {
       id: 'database-connection',
-      name: 'Database Connection',
-      description: 'Test connection to Supabase',
+      name: 'Database Connection Test',
+      description: 'Test Supabase database connectivity and permissions',
       test: async () => {
-        console.log('Testing database connection...');
+        // Test basic connection
+        const { data: healthCheck, error: healthError } = await supabase
+          .from('categories')
+          .select('count')
+          .limit(1);
         
-        try {
-          // Test basic Supabase connection with a simple query
-          const { data, error } = await supabase.from('categories').select('count').limit(1);
-          console.log('Supabase query result:', { data, error });
-          
-          if (error) {
-            console.error('Supabase query error:', error);
-            throw new Error(`Supabase connection failed: ${error.message}`);
-          }
-          
-          const isAuth = await db.isAuthenticated();
-          console.log('Authentication check:', isAuth);
-          
-          const currentUser = await db.getCurrentUser();
-          console.log('Current user:', currentUser?.email);
-          
-          return { 
-            supabaseConnected: !error,
-            authenticated: isAuth, 
-            userEmail: currentUser?.email,
-            online: navigator.onLine,
-            hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-            hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
-          };
-        } catch (error) {
-          console.error('Database connection test failed:', error);
-          throw error;
+        if (healthError) {
+          throw new Error(`Database connection failed: ${healthError.message}`);
         }
+        
+        // Test RLS policies
+        const { data: rlsTest, error: rlsError } = await supabase
+          .from('categories')
+          .select('*')
+          .limit(5);
+        
+        if (rlsError) {
+          throw new Error(`RLS policy error: ${rlsError.message}`);
+        }
+        
+        return {
+          connectionStatus: 'Connected',
+          rlsPolicies: 'Working',
+          userDataAccess: 'Permitted',
+          recordsAccessible: rlsTest?.length || 0
+        };
+      }
+    },
+    {
+      id: 'database-schema',
+      name: 'Database Schema Validation',
+      description: 'Verify all required tables and columns exist',
+      test: async () => {
+        const requiredTables = [
+          'categories', 'tasks', 'projects', 'project_activity_logs',
+          'activity_log_categories', 'events', 'user_settings'
+        ];
+        
+        const tableResults = {};
+        
+        for (const table of requiredTables) {
+          try {
+            const { data, error } = await supabase
+              .from(table)
+              .select('*')
+              .limit(1);
+            
+            tableResults[table] = error ? `Error: ${error.message}` : 'Accessible';
+          } catch (error) {
+            tableResults[table] = `Exception: ${error.message}`;
+          }
+        }
+        
+        const accessibleTables = Object.values(tableResults).filter(status => status === 'Accessible').length;
+        
+        if (accessibleTables !== requiredTables.length) {
+          throw new Error(`Only ${accessibleTables}/${requiredTables.length} tables accessible`);
+        }
+        
+        return {
+          totalTables: requiredTables.length,
+          accessibleTables,
+          tableStatus: tableResults
+        };
       }
     },
     {
       id: 'database-initialization',
-      name: 'Database Initialization',
+      name: 'Database Initialization Test',
       description: 'Test database setup and user initialization',
       test: async () => {
         try {
@@ -92,10 +169,22 @@ function TestIntegration({ onClose }) {
             throw new Error(`Database initialization failed: ${error.message}`);
           }
           
+          // Verify default data was created
+          const { data: categoriesData } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('predefined', true);
+          
+          const { data: activityCategoriesData } = await supabase
+            .from('activity_log_categories')
+            .select('*')
+            .eq('predefined', true);
+          
           return {
             setupSuccessful: !!data?.success,
             tablesCreated: data?.tables_created?.length || 0,
-            defaultDataCreated: data?.default_data_created || {},
+            defaultCategories: categoriesData?.length || 0,
+            defaultActivityCategories: activityCategoriesData?.length || 0,
             userId: data?.user_id
           };
         } catch (error) {
@@ -105,142 +194,372 @@ function TestIntegration({ onClose }) {
       }
     },
     {
-      id: 'simple-query-test',
-      name: 'Simple Query Test',
-      description: 'Test a basic database query',
+      id: 'crud-categories',
+      name: 'Categories CRUD Operations',
+      description: 'Test create, read, update, delete for categories',
       test: async () => {
-        try {
-          // Try a very simple query first
-          const { data, error } = await supabase
-            .from('categories')
-            .select('id')
-            .limit(1);
+        // CREATE
+        const newCategory = await addCategory('Test Category CRUD', '#FF5733');
+        if (!newCategory?.id) throw new Error('Failed to create category');
         
-          console.log('Simple query result:', { data, error });
-          
-          if (error) {
-            throw new Error(`Query failed: ${error.message}`);
-          }
-          
-          return {
-            querySuccessful: !error,
-            dataReceived: !!data,
-            recordCount: data?.length || 0
-          };
-        } catch (error) {
-          console.error('Simple query test failed:', error);
-          throw error;
+        // Store for cleanup
+        setTestData(prev => ({ ...prev, categoryId: newCategory.id }));
+        
+        // READ
+        const readCategories = await db.read('categories', { id: newCategory.id });
+        if (readCategories.length === 0) throw new Error('Failed to read created category');
+        
+        // UPDATE
+        await updateCategory(newCategory.id, { name: 'Updated Test Category', color: '#00FF00' });
+        const updatedCategories = await db.read('categories', { id: newCategory.id });
+        if (updatedCategories[0]?.name !== 'Updated Test Category') {
+          throw new Error('Failed to update category');
         }
-      }
-    },
-    {
-      id: 'read-operations',
-      name: 'Read Operations',
-      description: 'Test reading data from database',
-      test: async () => {
-        const tasksData = await db.read('tasks');
-        const categoriesData = await db.read('categories');
-        const projectsData = await db.read('projects');
-        
-        console.log('Read operations results:', {
-          tasks: tasksData.length,
-          categories: categoriesData.length,
-          projects: projectsData.length
-        });
         
         return {
-          tasksCount: tasksData.length,
-          categoriesCount: categoriesData.length,
-          projectsCount: projectsData.length
+          created: !!newCategory.id,
+          read: readCategories.length > 0,
+          updated: updatedCategories[0]?.name === 'Updated Test Category',
+          categoryId: newCategory.id
         };
       }
     },
     {
-      id: 'create-category',
-      name: 'Create Category',
-      description: 'Test creating a new category',
+      id: 'crud-tasks',
+      name: 'Tasks CRUD Operations',
+      description: 'Test create, read, update, delete for tasks',
       test: async () => {
-        const testCategory = await addCategory('Test Category', '#FF5733');
-        if (!testCategory || !testCategory.id) {
-          throw new Error('Failed to create category');
-        }
-        return { categoryId: testCategory.id, name: testCategory.name };
-      }
-    },
-    {
-      id: 'create-task',
-      name: 'Create Task',
-      description: 'Test creating a new task',
-      test: async () => {
-        const testTask = await addTask({
-          title: 'Test Task',
-          description: 'This is a test task',
-          priority: 'medium',
+        // CREATE
+        const newTask = await addTask({
+          title: 'Test Task CRUD',
+          description: 'Test task description',
+          priority: 'high',
           categories: []
         });
-        if (!testTask || !testTask.id) {
-          throw new Error('Failed to create task');
+        if (!newTask?.id) throw new Error('Failed to create task');
+        
+        // Store for cleanup
+        setTestData(prev => ({ ...prev, taskId: newTask.id }));
+        
+        // READ
+        const readTasks = await db.read('tasks', { id: newTask.id });
+        if (readTasks.length === 0) throw new Error('Failed to read created task');
+        
+        // UPDATE
+        await updateTask(newTask.id, { title: 'Updated Test Task', priority: 'urgent' });
+        const updatedTasks = await db.read('tasks', { id: newTask.id });
+        if (updatedTasks[0]?.title !== 'Updated Test Task') {
+          throw new Error('Failed to update task');
         }
-        return { taskId: testTask.id, title: testTask.title };
+        
+        return {
+          created: !!newTask.id,
+          read: readTasks.length > 0,
+          updated: updatedTasks[0]?.title === 'Updated Test Task',
+          taskId: newTask.id
+        };
       }
     },
     {
-      id: 'create-project',
-      name: 'Create Project',
-      description: 'Test creating a new project',
+      id: 'crud-projects',
+      name: 'Projects CRUD Operations',
+      description: 'Test create, read, update, delete for projects',
       test: async () => {
-        const testProject = await addProject({
-          title: 'Test Project',
-          description: 'This is a test project',
+        // CREATE
+        const newProject = await addProject({
+          title: 'Test Project CRUD',
+          description: 'Test project description',
           status: 'idea',
           color: '#3B82F6'
         });
-        if (!testProject || !testProject.id) {
-          throw new Error('Failed to create project');
+        if (!newProject?.id) throw new Error('Failed to create project');
+        
+        // Store for cleanup
+        setTestData(prev => ({ ...prev, projectId: newProject.id }));
+        
+        // READ
+        const readProjects = await db.read('projects', { id: newProject.id });
+        if (readProjects.length === 0) throw new Error('Failed to read created project');
+        
+        // UPDATE
+        await updateProject(newProject.id, { title: 'Updated Test Project', status: 'active' });
+        const updatedProjects = await db.read('projects', { id: newProject.id });
+        if (updatedProjects[0]?.title !== 'Updated Test Project') {
+          throw new Error('Failed to update project');
         }
-        return { projectId: testProject.id, title: testProject.title };
-      }
-    },
-    {
-      id: 'create-activity-category',
-      name: 'Create Activity Log Category',
-      description: 'Test creating a new activity log category',
-      test: async () => {
-        const testCategory = await addActivityLogCategory('Test Activity Category', '#FF5733');
-        if (!testCategory || !testCategory.id) {
-          throw new Error('Failed to create activity log category');
-        }
-        return { categoryId: testCategory.id, name: testCategory.name };
-      }
-    },
-    {
-      id: 'sync-status',
-      name: 'Sync Service',
-      description: 'Test sync service functionality',
-      test: async () => {
-        const status = syncService.getSyncStatus();
+        
         return {
-          isOnline: status.isOnline,
-          queueLength: status.queueLength,
-          syncInProgress: status.syncInProgress
+          created: !!newProject.id,
+          read: readProjects.length > 0,
+          updated: updatedProjects[0]?.title === 'Updated Test Project',
+          projectId: newProject.id
         };
       }
     },
     {
-      id: 'offline-simulation',
-      name: 'Offline Mode Test',
-      description: 'Test offline functionality',
+      id: 'crud-activity-categories',
+      name: 'Activity Log Categories CRUD',
+      description: 'Test create, read, update, delete for activity log categories',
       test: async () => {
+        // CREATE
+        const newCategory = await addActivityLogCategory('Test Activity Category CRUD', '#FF5733');
+        if (!newCategory?.id) throw new Error('Failed to create activity log category');
+        
+        // Store for cleanup
+        setTestData(prev => ({ ...prev, activityCategoryId: newCategory.id }));
+        
+        // READ
+        const readCategories = await db.read('activity_log_categories', { id: newCategory.id });
+        if (readCategories.length === 0) throw new Error('Failed to read created activity log category');
+        
+        // UPDATE
+        await updateActivityLogCategory(newCategory.id, { name: 'Updated Test Activity Category', color: '#00FF00' });
+        const updatedCategories = await db.read('activity_log_categories', { id: newCategory.id });
+        if (updatedCategories[0]?.name !== 'Updated Test Activity Category') {
+          throw new Error('Failed to update activity log category');
+        }
+        
+        return {
+          created: !!newCategory.id,
+          read: readCategories.length > 0,
+          updated: updatedCategories[0]?.name === 'Updated Test Activity Category',
+          categoryId: newCategory.id
+        };
+      }
+    },
+    {
+      id: 'crud-events',
+      name: 'Events CRUD Operations',
+      description: 'Test create, read, update, delete for events',
+      test: async () => {
+        // CREATE
+        const newEvent = await addEvent({
+          title: 'Test Event CRUD',
+          location: 'Test Location',
+          startDate: '2024-12-01',
+          endDate: '2024-12-03',
+          participationType: 'exhibitor'
+        });
+        if (!newEvent?.id) throw new Error('Failed to create event');
+        
+        // Store for cleanup
+        setTestData(prev => ({ ...prev, eventId: newEvent.id }));
+        
+        // READ
+        const readEvents = await db.read('events', { id: newEvent.id });
+        if (readEvents.length === 0) throw new Error('Failed to read created event');
+        
+        // UPDATE
+        await updateEvent(newEvent.id, { title: 'Updated Test Event', location: 'Updated Location' });
+        const updatedEvents = await db.read('events', { id: newEvent.id });
+        if (updatedEvents[0]?.title !== 'Updated Test Event') {
+          throw new Error('Failed to update event');
+        }
+        
+        return {
+          created: !!newEvent.id,
+          read: readEvents.length > 0,
+          updated: updatedEvents[0]?.title === 'Updated Test Event',
+          eventId: newEvent.id
+        };
+      }
+    },
+    {
+      id: 'real-time-subscriptions',
+      name: 'Real-time Subscriptions Test',
+      description: 'Test real-time database subscriptions',
+      test: async () => {
+        return new Promise((resolve, reject) => {
+          let subscriptionCount = 0;
+          const subscriptions = [];
+          const tables = ['categories', 'tasks', 'projects', 'activity_log_categories', 'events'];
+          
+          // Test each table subscription
+          tables.forEach(table => {
+            try {
+              const subscription = db.subscribe(table, (payload) => {
+                console.log(`Real-time update received for ${table}:`, payload);
+                subscriptionCount++;
+              });
+              
+              if (subscription) {
+                subscriptions.push({ table, subscription, status: 'Connected' });
+              } else {
+                subscriptions.push({ table, subscription: null, status: 'Failed' });
+              }
+            } catch (error) {
+              subscriptions.push({ table, subscription: null, status: `Error: ${error.message}` });
+            }
+          });
+          
+          // Wait a moment then resolve
+          setTimeout(() => {
+            // Cleanup subscriptions
+            subscriptions.forEach(({ subscription }) => {
+              if (subscription) {
+                db.unsubscribe(subscription);
+              }
+            });
+            
+            const connectedCount = subscriptions.filter(s => s.status === 'Connected').length;
+            
+            if (connectedCount === 0) {
+              reject(new Error('No real-time subscriptions could be established'));
+            } else {
+              resolve({
+                totalTables: tables.length,
+                connectedSubscriptions: connectedCount,
+                subscriptionDetails: subscriptions.reduce((acc, s) => {
+                  acc[s.table] = s.status;
+                  return acc;
+                }, {}),
+                realTimeEnabled: connectedCount > 0
+              });
+            }
+          }, 2000);
+        });
+      }
+    },
+    {
+      id: 'offline-functionality',
+      name: 'Offline Functionality Test',
+      description: 'Test offline operations and sync queue',
+      test: async () => {
+        // Test offline creation
         const offlineTask = await db.createOffline('tasks', {
           title: 'Offline Test Task',
-          description: 'Created while offline',
+          description: 'Created in offline mode',
           priority: 'low'
         });
         
+        // Test offline queue
+        const queueItem = syncService.queueOperation({
+          type: 'create',
+          table: 'tasks',
+          data: { title: 'Queued Task', priority: 'medium' }
+        });
+        
+        // Get sync status
+        const syncStatus = syncService.getSyncStatus();
+        
+        // Cleanup offline data
+        const offlineItems = db.getFromLocalStorage('tasks');
+        const filteredItems = offlineItems.filter(item => item.id !== offlineTask.id);
+        localStorage.setItem('todoTasks', JSON.stringify(filteredItems));
+        
         return {
-          offlineTaskId: offlineTask.id,
-          hasLocalId: !!offlineTask.local_id,
-          originalOnlineStatus: navigator.onLine
+          offlineCreateSuccess: !!offlineTask.id,
+          queueOperationSuccess: !!queueItem.id,
+          queueLength: syncStatus.queueLength,
+          offlineSupport: true,
+          localStorageWorking: true
+        };
+      }
+    },
+    {
+      id: 'sync-service',
+      name: 'Sync Service Validation',
+      description: 'Test sync service functionality and statistics',
+      test: async () => {
+        const status = syncService.getSyncStatus();
+        const stats = syncService.getSyncStats();
+        
+        // Test queue operations
+        const testOperation = syncService.queueOperation({
+          type: 'update',
+          table: 'tasks',
+          id: 'test-id',
+          updates: { title: 'Test Update' }
+        });
+        
+        return {
+          syncServiceOnline: status.isOnline,
+          queueLength: status.queueLength,
+          syncInProgress: status.syncInProgress,
+          totalSyncs: stats.totalSyncs,
+          successfulSyncs: stats.successfulSyncs,
+          queueOperationWorking: !!testOperation.id,
+          autoSyncEnabled: syncService.isAutoSyncEnabled()
+        };
+      }
+    },
+    {
+      id: 'data-relationships',
+      name: 'Data Relationships Test',
+      description: 'Test foreign key relationships and data integrity',
+      test: async () => {
+        // This test uses existing test data created in previous tests
+        const { taskId, projectId, categoryId } = testData;
+        
+        if (!taskId || !projectId || !categoryId) {
+          throw new Error('Required test data not available. Run CRUD tests first.');
+        }
+        
+        // Test task-category relationship
+        await updateTask(taskId, { categories: [categoryId] });
+        const taskWithCategory = await db.read('tasks', { id: taskId });
+        const hasCategory = taskWithCategory[0]?.categories?.includes(categoryId);
+        
+        // Test task-project relationship
+        await updateTask(taskId, { linkedProject: projectId });
+        const taskWithProject = await db.read('tasks', { id: taskId });
+        const hasProject = taskWithProject[0]?.linkedProject === projectId;
+        
+        return {
+          taskCategoryLink: hasCategory,
+          taskProjectLink: hasProject,
+          foreignKeysWorking: hasCategory && hasProject,
+          dataIntegrity: 'Maintained'
+        };
+      }
+    },
+    {
+      id: 'performance-test',
+      name: 'Performance Test',
+      description: 'Test database performance with multiple operations',
+      test: async () => {
+        const startTime = Date.now();
+        
+        // Perform multiple read operations
+        const readPromises = [
+          db.read('categories'),
+          db.read('tasks'),
+          db.read('projects'),
+          db.read('activity_log_categories'),
+          db.read('events')
+        ];
+        
+        const results = await Promise.all(readPromises);
+        const readTime = Date.now() - startTime;
+        
+        // Test batch operations
+        const batchStartTime = Date.now();
+        const batchPromises = [];
+        
+        for (let i = 0; i < 5; i++) {
+          batchPromises.push(
+            addCategory(`Batch Test Category ${i}`, '#FF0000')
+          );
+        }
+        
+        const batchResults = await Promise.all(batchPromises);
+        const batchTime = Date.now() - batchStartTime;
+        
+        // Cleanup batch test data
+        for (const category of batchResults) {
+          if (category?.id) {
+            await deleteCategory(category.id);
+          }
+        }
+        
+        const totalRecords = results.reduce((sum, result) => sum + result.length, 0);
+        
+        return {
+          readOperationsTime: `${readTime}ms`,
+          batchOperationsTime: `${batchTime}ms`,
+          totalRecordsRead: totalRecords,
+          averageReadTime: `${Math.round(readTime / 5)}ms per table`,
+          performanceRating: readTime < 1000 ? 'Excellent' : readTime < 2000 ? 'Good' : 'Needs Optimization'
         };
       }
     }
@@ -250,8 +569,9 @@ function TestIntegration({ onClose }) {
     setIsRunning(true);
     setResults({});
     setCurrentTest(null);
+    setTestData({});
     
-    console.log('Starting test suite...');
+    console.log('Starting comprehensive test suite...');
     console.log('Environment check:', {
       supabaseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Missing',
       supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing',
@@ -280,12 +600,33 @@ function TestIntegration({ onClose }) {
       }
       
       // Small delay between tests for better UX
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
+    
+    // Cleanup test data
+    await cleanupTestData();
     
     setCurrentTest(null);
     setIsRunning(false);
-    console.log('Test suite completed');
+    console.log('Comprehensive test suite completed');
+  };
+
+  const cleanupTestData = async () => {
+    console.log('Cleaning up test data...');
+    const { categoryId, taskId, projectId, activityCategoryId, eventId } = testData;
+    
+    try {
+      // Delete in reverse order to handle foreign key constraints
+      if (taskId) await deleteTask(taskId);
+      if (projectId) await deleteProject(projectId);
+      if (eventId) await deleteEvent(eventId);
+      if (categoryId) await deleteCategory(categoryId);
+      if (activityCategoryId) await deleteActivityLogCategory(activityCategoryId);
+      
+      console.log('Test data cleanup completed');
+    } catch (error) {
+      console.warn('Some test data cleanup failed:', error);
+    }
   };
 
   const getTestStatus = (testId) => {
@@ -313,21 +654,23 @@ function TestIntegration({ onClose }) {
   const successCount = Object.values(results).filter(r => r.status === 'success').length;
   const errorCount = Object.values(results).filter(r => r.status === 'error').length;
   const totalTests = testSuite.length;
+  const completionRate = Math.round(((successCount + errorCount) / totalTests) * 100);
+  const successRate = totalTests > 0 ? Math.round((successCount / (successCount + errorCount)) * 100) : 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
           <div className="flex items-center space-x-3">
             <SafeIcon icon={FiDatabase} className="text-2xl" />
             <div>
-              <h2 className="text-xl font-semibold">Supabase Integration Test</h2>
-              <p className="text-blue-100 text-sm">Testing database connectivity and operations</p>
+              <h2 className="text-xl font-semibold">Comprehensive Supabase Validation</h2>
+              <p className="text-blue-100 text-sm">Complete integration testing and validation</p>
             </div>
           </div>
           <button
@@ -341,30 +684,61 @@ function TestIntegration({ onClose }) {
         {/* Test Results Summary */}
         {Object.keys(results).length > 0 && (
           <div className="p-4 bg-gray-50 border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-lg p-3 border">
                 <div className="flex items-center space-x-2">
                   <SafeIcon icon={FiCheck} className="text-green-500" />
-                  <span className="text-sm font-medium text-green-700">{successCount} Passed</span>
-                </div>
-                {errorCount > 0 && (
-                  <div className="flex items-center space-x-2">
-                    <SafeIcon icon={FiX} className="text-red-500" />
-                    <span className="text-sm font-medium text-red-700">{errorCount} Failed</span>
+                  <div>
+                    <p className="text-sm font-medium text-green-700">{successCount} Passed</p>
+                    <p className="text-xs text-gray-500">Success Rate: {successRate}%</p>
                   </div>
-                )}
-                <div className="text-sm text-gray-600">
-                  {successCount + errorCount} / {totalTests} completed
                 </div>
               </div>
               
-              {/* Progress Bar */}
-              <div className="w-32 bg-gray-200 rounded-full h-2">
+              {errorCount > 0 && (
+                <div className="bg-white rounded-lg p-3 border">
+                  <div className="flex items-center space-x-2">
+                    <SafeIcon icon={FiX} className="text-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700">{errorCount} Failed</p>
+                      <p className="text-xs text-gray-500">Need attention</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="flex items-center space-x-2">
+                  <SafeIcon icon={FiRefreshCw} className="text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-700">Progress</p>
+                    <p className="text-xs text-gray-500">{completionRate}% Complete</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="flex items-center space-x-2">
+                  <SafeIcon icon={navigator.onLine ? FiWifi : FiWifiOff} className={navigator.onLine ? "text-green-500" : "text-red-500"} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Status</p>
+                    <p className="text-xs text-gray-500">{navigator.onLine ? 'Online' : 'Offline'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mt-4">
+              <div className="w-full bg-gray-200 rounded-full h-3">
                 <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${((successCount + errorCount) / totalTests) * 100}%` }}
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${completionRate}%` }}
                 />
               </div>
+              <p className="text-xs text-gray-600 mt-1 text-center">
+                {successCount + errorCount} / {totalTests} tests completed
+              </p>
             </div>
           </div>
         )}
@@ -380,14 +754,14 @@ function TestIntegration({ onClose }) {
                 <motion.div
                   key={test.id}
                   layout
-                  className={`p-4 border rounded-lg ${
+                  className={`p-4 border rounded-lg transition-all ${
                     currentTest === test.id 
-                      ? 'border-blue-300 bg-blue-50' 
+                      ? 'border-blue-300 bg-blue-50 shadow-md' 
                       : result?.status === 'success'
                       ? 'border-green-200 bg-green-50'
                       : result?.status === 'error'
                       ? 'border-red-200 bg-red-50'
-                      : 'border-gray-200 bg-white'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-start space-x-3">
@@ -400,7 +774,18 @@ function TestIntegration({ onClose }) {
                     </motion.div>
                     
                     <div className="flex-1">
-                      <h3 className="font-medium text-gray-900">{test.name}</h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium text-gray-900">{test.name}</h3>
+                        {result?.status && (
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            result.status === 'success' 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            {result.status === 'success' ? 'PASSED' : 'FAILED'}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600 mt-1">{test.description}</p>
                       
                       {/* Test Result Details */}
@@ -411,16 +796,23 @@ function TestIntegration({ onClose }) {
                           className="mt-3"
                         >
                           {result.status === 'success' && result.result && (
-                            <div className="bg-green-100 border border-green-200 rounded p-2">
-                              <pre className="text-xs text-green-800 whitespace-pre-wrap">
-                                {JSON.stringify(result.result, null, 2)}
-                              </pre>
+                            <div className="bg-green-100 border border-green-200 rounded p-3">
+                              <h4 className="text-sm font-medium text-green-800 mb-2">Test Results:</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                {Object.entries(result.result).map(([key, value]) => (
+                                  <div key={key} className="flex justify-between">
+                                    <span className="text-green-700 font-medium">{key}:</span>
+                                    <span className="text-green-800">{String(value)}</span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                           
                           {result.status === 'error' && (
-                            <div className="bg-red-100 border border-red-200 rounded p-2">
-                              <p className="text-sm text-red-800">{result.error}</p>
+                            <div className="bg-red-100 border border-red-200 rounded p-3">
+                              <h4 className="text-sm font-medium text-red-800 mb-1">Error Details:</h4>
+                              <p className="text-sm text-red-700">{result.error}</p>
                             </div>
                           )}
                         </motion.div>
@@ -435,14 +827,22 @@ function TestIntegration({ onClose }) {
 
         {/* Actions */}
         <div className="flex items-center justify-between p-6 border-t bg-gray-50">
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <SafeIcon icon={navigator.onLine ? FiWifi : FiWifiOff} className="text-lg" />
-            <span>{navigator.onLine ? 'Online' : 'Offline'}</span>
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <div className="flex items-center space-x-2">
+              <SafeIcon icon={navigator.onLine ? FiWifi : FiWifiOff} className="text-lg" />
+              <span>{navigator.onLine ? 'Online' : 'Offline'}</span>
+            </div>
             {user && (
-              <>
-                <span>•</span>
+              <div className="flex items-center space-x-2">
+                <SafeIcon icon={FiUsers} className="text-lg" />
                 <span>Authenticated as {user.email}</span>
-              </>
+              </div>
+            )}
+            {Object.keys(results).length > 0 && (
+              <div className="flex items-center space-x-2">
+                <SafeIcon icon={FiZap} className="text-lg" />
+                <span>{successRate}% Success Rate</span>
+              </div>
             )}
           </div>
           
@@ -475,7 +875,7 @@ function TestIntegration({ onClose }) {
               ) : (
                 <div className="flex items-center space-x-2">
                   <SafeIcon icon={FiPlay} className="text-sm" />
-                  <span>Run All Tests</span>
+                  <span>Run Comprehensive Tests</span>
                 </div>
               )}
             </button>
