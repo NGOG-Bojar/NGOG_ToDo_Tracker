@@ -6,13 +6,18 @@ import CategoryManager from './CategoryManager';
 import ActivityLogCategoryManager from './ActivityLogCategoryManager';
 import DataManager from '../components/DataManager';
 import TestIntegration from '../components/TestIntegration';
+import SyncSettingsModal from '../components/SyncSettingsModal';
 
-const { FiSettings, FiLock, FiTag, FiDatabase, FiEye, FiEyeOff, FiCheck, FiX, FiKey, FiShield, FiMessageSquare } = FiIcons;
+const { 
+  FiSettings, FiLock, FiTag, FiDatabase, FiEye, FiEyeOff, FiCheck, FiX, 
+  FiKey, FiShield, FiMessageSquare, FiRefreshCw 
+} = FiIcons;
 
 function Settings() {
   const [activeTab, setActiveTab] = useState('password');
   const [showDataManager, setShowDataManager] = useState(false);
   const [showTestIntegration, setShowTestIntegration] = useState(false);
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
 
   // Password change form state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -93,6 +98,7 @@ function Settings() {
     { id: 'categories', label: 'Task Categories', icon: FiTag },
     { id: 'activityCategories', label: 'Activity Categories', icon: FiMessageSquare },
     { id: 'data', label: 'Data Management', icon: FiDatabase },
+    { id: 'sync', label: 'Sync Settings', icon: FiRefreshCw },
     { id: 'testing', label: 'Integration Tests', icon: FiSettings }
   ];
 
@@ -359,6 +365,47 @@ function Settings() {
               </motion.div>
             )}
 
+            {activeTab === 'sync' && (
+              <motion.div
+                key="sync"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="max-w-2xl">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <SafeIcon icon={FiRefreshCw} className="text-blue-600 text-xl" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Sync Settings</h3>
+                      <p className="text-sm text-gray-600">Configure how your data syncs across devices</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                    <h4 className="text-sm font-medium text-blue-900 mb-2">Sync Features:</h4>
+                    <ul className="text-xs text-blue-700 space-y-1">
+                      <li>• Real-time synchronization across all devices</li>
+                      <li>• Automatic conflict resolution</li>
+                      <li>• Offline queue for when you're disconnected</li>
+                      <li>• Customizable sync intervals and preferences</li>
+                      <li>• Detailed sync statistics and monitoring</li>
+                    </ul>
+                  </div>
+                  
+                  <button
+                    onClick={() => setShowSyncSettings(true)}
+                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <SafeIcon icon={FiRefreshCw} className="text-lg" />
+                    <span>Open Sync Settings</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             {activeTab === 'testing' && (
               <motion.div
                 key="testing"
@@ -416,6 +463,12 @@ function Settings() {
           onClose={() => setShowTestIntegration(false)}
         />
       )}
+
+      {/* Sync Settings Modal */}
+      <SyncSettingsModal
+        isOpen={showSyncSettings}
+        onClose={() => setShowSyncSettings(false)}
+      />
     </div>
   );
 }
