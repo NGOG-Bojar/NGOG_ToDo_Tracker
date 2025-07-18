@@ -29,6 +29,7 @@ class DatabaseService {
   async isAuthenticated() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
+      console.log('Auth check result:', { user: user?.email, error });
       if (error) {
         console.error('Auth check error:', error)
         return false
@@ -46,6 +47,7 @@ class DatabaseService {
   async getCurrentUser() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
+      console.log('Get user result:', { user: user?.email, error });
       if (error) {
         console.error('Get user error:', error)
         return null

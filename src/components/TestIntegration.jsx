@@ -44,28 +44,63 @@ function TestIntegration({ onClose }) {
       test: async () => {
         console.log('Testing database connection...');
         
-        // Test basic Supabase connection with a simple query
-        const { data, error } = await supabase.from('categories').select('count').limit(1);
-        console.log('Supabase query result:', { data, error });
-        
-        if (error) {
-          throw new Error(`Supabase connection failed: ${error.message}`);
+        try {
+          // Test basic Supabase connection with a simple query
+          const { data, error } = await supabase.from('categories').select('count').limit(1);
+          console.log('Supabase query result:', { data, error });
+          
+          if (error) {
+            console.error('Supabase query error:', error);
+            throw new Error(`Supabase connection failed: ${error.message}`);
+          }
+          
+          const isAuth = await db.isAuthenticated();
+          console.log('Authentication check:', isAuth);
+          
+          const currentUser = await db.getCurrentUser();
+          console.log('Current user:', currentUser?.email);
+          
+          return { 
+            supabaseConnected: !error,
+            authenticated: isAuth, 
+            userEmail: currentUser?.email,
+            online: navigator.onLine,
+            hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+            hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
+          };
+        } catch (error) {
+          console.error('Database connection test failed:', error);
+          throw error;
         }
+      }
+    },
+    {
+      id: 'simple-query-test',
+      name: 'Simple Query Test',
+      description: 'Test a basic database query',
+      test: async () => {
+        try {
+          // Try a very simple query first
+          const { data, error } = await supabase
+            .from('categories')
+            .select('id')
+            .limit(1);
         
-        const isAuth = await db.isAuthenticated();
-        console.log('Authentication check:', isAuth);
-        
-        const currentUser = await db.getCurrentUser();
-        console.log('Current user:', currentUser?.email);
-        
-        return { 
-          supabaseConnected: !error,
-          authenticated: isAuth, 
-          userEmail: currentUser?.email,
-          online: navigator.onLine,
-          hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-          hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
-        };
+          console.log('Simple query result:', { data, error });
+          
+          if (error) {
+            throw new Error(`Query failed: ${error.message}`);
+          }
+          
+          return {
+            querySuccessful: !error,
+            dataReceived: !!data,
+            recordCount: data?.length || 0
+          };
+        } catch (error) {
+          console.error('Simple query test failed:', error);
+          throw error;
+        }
       }
     },
     {
