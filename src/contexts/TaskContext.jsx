@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { isToday, isPast, parseISO } from 'date-fns';
-import { useProject } from './ProjectContext';
+import { db } from '../services/database';
+import { syncService } from '../services/syncService';
+import { useAuth } from './AuthContext';
 
 const TaskContext = createContext();
 
@@ -83,58 +84,113 @@ function taskReducer(state, action) {
 
 export function TaskProvider({ children }) {
   const [state, dispatch] = useReducer(taskReducer, initialState);
+  const { user } = useAuth();
 
-  // Load tasks from localStorage on mount
+  // Load tasks from database on mount
   useEffect(() => {
-    const savedTasks = localStorage.getItem('todoTasks');
-    if (savedTasks) {
-      dispatch({
-        type: 'LOAD_TASKS',
-        payload: JSON.parse(savedTasks)
-      });
-    }
+    loadTasks();
   }, []);
 
-  // Save tasks to localStorage whenever tasks change
+  // Listen for data refresh events from sync service
   useEffect(() => {
-    localStorage.setItem('todoTasks', JSON.stringify(state.tasks));
-  }, [state.tasks]);
-
-  const addTask = (taskData) => {
-    const taskId = uuidv4();
-    dispatch({
-      type: 'ADD_TASK',
-      payload: { taskData, id: taskId }
-    });
-    
-    // Return the task object with the generated ID
-    return {
-      ...taskData,
-      id: taskId,
-      createdAt: new Date().toISOString(),
-      status: 'open'
+    const handleDataRefresh = () => {
+      loadTasks();
     };
+
+    window.addEventListener('dataRefresh', handleDataRefresh);
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, []);
+
+  // Load tasks from database
+  const loadTasks = async () => {
+    try {
+      const tasks = await db.read('tasks');
+      dispatch({
+        type: 'LOAD_TASKS',
+        payload: tasks
+      });
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    }
   };
 
-  const updateTask = (id, updates) => {
-    dispatch({
-      type: 'UPDATE_TASK',
-      payload: { id, ...updates }
-    });
+  const addTask = async (taskData) => {
+    try {
+      const newTask = await db.create('tasks', {
+        ...taskData,
+        status: 'open'
+      });
+      
+      dispatch({
+        type: 'ADD_TASK',
+        payload: { taskData: newTask, id: newTask.id }
+      });
+      
+      return newTask;
+    } catch (error) {
+      console.error('Error adding task:', error);
+      // If online operation fails, queue for later
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'create',
+          table: 'tasks',
+          data: { ...taskData, status: 'open' }
+        });
+      }
+      throw error;
+    }
   };
 
-  const deleteTask = (id) => {
-    dispatch({
-      type: 'DELETE_TASK',
-      payload: id
-    });
+  const updateTask = async (id, updates) => {
+    try {
+      const updatedTask = await db.update('tasks', id, updates);
+      dispatch({
+        type: 'UPDATE_TASK',
+        payload: { id, ...updates }
+      });
+      return updatedTask;
+    } catch (error) {
+      console.error('Error updating task:', error);
+      // If online operation fails, queue for later
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'tasks',
+          id,
+          updates
+        });
+      }
+      throw error;
+    }
   };
 
-  const toggleTaskStatus = (id) => {
-    dispatch({
-      type: 'TOGGLE_TASK_STATUS',
-      payload: id
-    });
+  const deleteTask = async (id) => {
+    try {
+      await db.delete('tasks', id);
+      dispatch({
+        type: 'DELETE_TASK',
+        payload: id
+      });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      // If online operation fails, queue for later
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'delete',
+          table: 'tasks',
+          id
+        });
+      }
+      throw error;
+    }
+  };
+
+  const toggleTaskStatus = async (id) => {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+
+    const newStatus = task.status === 'open' ? 'completed' : 'open';
+    await updateTask(id, { status: newStatus });
   };
 
   const setSearchTerm = (term) => {

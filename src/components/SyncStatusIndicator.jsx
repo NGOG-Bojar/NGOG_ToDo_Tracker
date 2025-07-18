@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
+import { syncService } from '../services/syncService';
 
 const { FiWifi, FiWifiOff, FiCloud, FiCloudOff, FiCheck, FiAlertTriangle, FiRefreshCw } = FiIcons;
 
@@ -11,6 +12,7 @@ function SyncStatusIndicator() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'syncing', 'success', 'error'
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [queueLength, setQueueLength] = useState(0);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -19,11 +21,37 @@ function SyncStatusIndicator() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Update sync status periodically
+    const updateSyncStatus = () => {
+      const status = syncService.getSyncStatus();
+      setQueueLength(status.queueLength);
+      setLastSyncTime(status.lastSync);
+    };
+
+    const interval = setInterval(updateSyncStatus, 1000);
+    updateSyncStatus(); // Initial update
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
     };
   }, []);
+
+  // Manual sync handler
+  const handleManualSync = async () => {
+    if (!isOnline || !user) return;
+    
+    setSyncStatus('syncing');
+    try {
+      await syncService.manualSync();
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (error) {
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  };
 
   // Don't show indicator if user is not authenticated
   if (!user || !session) {
@@ -51,6 +79,7 @@ function SyncStatusIndicator() {
     if (syncStatus === 'syncing') return 'Syncing...';
     if (syncStatus === 'error') return 'Sync Error';
     if (syncStatus === 'success') return 'Synced';
+    if (queueLength > 0) return `${queueLength} pending`;
     return 'Online';
   };
 
@@ -61,7 +90,9 @@ function SyncStatusIndicator() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`flex items-center space-x-2 bg-white rounded-full shadow-lg border px-3 py-2 ${getStatusColor()}`}
+        className={`flex items-center space-x-2 bg-white rounded-full shadow-lg border px-3 py-2 ${getStatusColor()} cursor-pointer`}
+        onClick={handleManualSync}
+        title={isOnline && user ? 'Click to sync now' : undefined}
       >
         <motion.div
           animate={syncStatus === 'syncing' ? { rotate: 360 } : {}}
@@ -73,6 +104,11 @@ function SyncStatusIndicator() {
         {lastSyncTime && syncStatus === 'success' && (
           <span className="text-xs text-gray-400">
             {new Date(lastSyncTime).toLocaleTimeString()}
+          </span>
+        )}
+        {queueLength > 0 && (
+          <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+            {queueLength}
           </span>
         )}
       </motion.div>

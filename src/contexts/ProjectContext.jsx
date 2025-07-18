@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { db } from '../services/database';
+import { syncService } from '../services/syncService';
+import { useAuth } from './AuthContext';
+import useRealtime from '../hooks/useRealtime';
 
 const ProjectContext = createContext();
 
@@ -244,38 +247,155 @@ function projectReducer(state, action) {
 
 export function ProjectProvider({ children }) {
   const [state, dispatch] = useReducer(projectReducer, initialState);
+  const { user } = useAuth();
 
-  // Load projects from localStorage on mount
+  // Load projects from database on mount
   useEffect(() => {
-    const savedProjects = localStorage.getItem('todoProjects');
-    if (savedProjects) {
-      dispatch({ type: 'LOAD_PROJECTS', payload: JSON.parse(savedProjects) });
+    loadProjects();
+  }, []);
+
+  // Listen for data refresh events
+  useEffect(() => {
+    const handleDataRefresh = () => {
+      loadProjects();
+    };
+
+    window.addEventListener('dataRefresh', handleDataRefresh);
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, []);
+
+  // Real-time subscription for projects
+  useRealtime('projects', (payload) => {
+    switch (payload.eventType) {
+      case 'INSERT':
+        dispatch({ type: 'ADD_PROJECT', payload: payload.new });
+        break;
+      case 'UPDATE':
+        dispatch({ type: 'UPDATE_PROJECT', payload: { id: payload.new.id, updates: payload.new } });
+        break;
+      case 'DELETE':
+        dispatch({ type: 'DELETE_PROJECT', payload: payload.old.id });
+        break;
     }
   }, []);
 
-  // Save projects to localStorage whenever projects change
-  useEffect(() => {
-    localStorage.setItem('todoProjects', JSON.stringify(state.projects));
-  }, [state.projects]);
-
-  const addProject = (projectData) => {
-    dispatch({ type: 'ADD_PROJECT', payload: projectData });
+  // Load projects from database
+  const loadProjects = async () => {
+    try {
+      const projects = await db.read('projects');
+      dispatch({ type: 'LOAD_PROJECTS', payload: projects });
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    }
   };
 
-  const updateProject = (id, updates) => {
-    dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates } });
+  const addProject = async (projectData) => {
+    try {
+      const newProject = await db.create('projects', {
+        ...projectData,
+        archived: false,
+        activityLog: [
+          {
+            id: crypto.randomUUID(),
+            type: 'created',
+            message: 'Project created',
+            timestamp: new Date().toISOString(),
+            auto: true,
+            category: 'general'
+          }
+        ]
+      });
+      
+      dispatch({ type: 'ADD_PROJECT', payload: projectData });
+      return newProject;
+    } catch (error) {
+      console.error('Error adding project:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'create',
+          table: 'projects',
+          data: { ...projectData, archived: false }
+        });
+      }
+      throw error;
+    }
   };
 
-  const deleteProject = (id) => {
-    dispatch({ type: 'DELETE_PROJECT', payload: id });
+  const updateProject = async (id, updates) => {
+    try {
+      await db.update('projects', id, updates);
+      dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates } });
+    } catch (error) {
+      console.error('Error updating project:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'projects',
+          id,
+          updates
+        });
+      }
+      throw error;
+    }
   };
 
-  const archiveProject = (id) => {
-    dispatch({ type: 'ARCHIVE_PROJECT', payload: id });
+  const deleteProject = async (id) => {
+    try {
+      await db.delete('projects', id);
+      dispatch({ type: 'DELETE_PROJECT', payload: id });
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'delete',
+          table: 'projects',
+          id
+        });
+      }
+      throw error;
+    }
   };
 
-  const restoreProject = (id) => {
-    dispatch({ type: 'RESTORE_PROJECT', payload: id });
+  const archiveProject = async (id) => {
+    try {
+      await db.update('projects', id, { 
+        archived: true, 
+        archived_at: new Date().toISOString() 
+      });
+      dispatch({ type: 'ARCHIVE_PROJECT', payload: id });
+    } catch (error) {
+      console.error('Error archiving project:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'projects',
+          id,
+          updates: { archived: true, archived_at: new Date().toISOString() }
+        });
+      }
+      throw error;
+    }
+  };
+
+  const restoreProject = async (id) => {
+    try {
+      await db.update('projects', id, { 
+        archived: false, 
+        archived_at: null 
+      });
+      dispatch({ type: 'RESTORE_PROJECT', payload: id });
+    } catch (error) {
+      console.error('Error restoring project:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'projects',
+          id,
+          updates: { archived: false, archived_at: null }
+        });
+      }
+      throw error;
+    }
   };
 
   const addActivityLog = (projectId, entry) => {
