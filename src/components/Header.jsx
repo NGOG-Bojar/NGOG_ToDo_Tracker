@@ -22,7 +22,7 @@ const {
 function Header() {
   const location = useLocation();
   const [showTasksSubmenu, setShowTasksSubmenu] = useState(false);
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   const navItems = [
     { path: '/', icon: FiHome, label: 'Dashboard' },
@@ -119,7 +119,7 @@ function Header() {
               </div>
             ))}
             {/* Logout Button */}
-            {user && (
+            {user && session && (
               <div className="ml-3 pl-3 border-l border-gray-200">
                 <LogoutButton />
               </div>

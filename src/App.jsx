@@ -12,6 +12,7 @@ import EventsPage from './pages/EventsPage';
 import Settings from './pages/Settings';
 import NotificationBanner from './components/NotificationBanner';
 import AuthGuard from './components/auth/AuthGuard';
+import SyncStatusIndicator from './components/SyncStatusIndicator';
 import { TaskProvider } from './contexts/TaskContext';
 import { CategoryProvider } from './contexts/CategoryContext';
 import { ProjectProvider } from './contexts/ProjectContext';
@@ -54,6 +55,7 @@ function App() {
                           <Route path="/settings" element={<Settings />} />
                         </Routes>
                       </motion.main>
+                      <SyncStatusIndicator />
                     </div>
                   </EventProvider>
                 </ActivityLogCategoryProvider>

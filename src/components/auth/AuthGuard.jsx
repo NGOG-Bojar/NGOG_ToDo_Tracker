@@ -5,7 +5,7 @@ import LoadingSpinner from './LoadingSpinner'
 import OfflineMode from './OfflineMode'
 
 export default function AuthGuard({ children }) {
-  const { user, loading } = useAuth()
+  const { user, loading, session } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [useOfflineMode, setUseOfflineMode] = useState(false)
 
@@ -14,8 +14,8 @@ export default function AuthGuard({ children }) {
     return <LoadingSpinner />
   }
 
-  // If user is authenticated, show the app
-  if (user) {
+  // If user is authenticated and session is valid, show the app
+  if (user && session) {
     return children
   }
 

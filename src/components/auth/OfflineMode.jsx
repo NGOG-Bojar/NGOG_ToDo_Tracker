@@ -48,6 +48,8 @@ export default function OfflineMode({ children }) {
                   >
                     <SafeIcon icon={FiX} className="text-lg" />
                   </button>
+                  <li>• Automatic backups</li>
+                  <li>• Manual backups only</li>
                 </div>
               </div>
             </div>
