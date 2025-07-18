@@ -80,6 +80,7 @@ class DatabaseService {
         
         // Also save to localStorage as backup
         this.saveToLocalStorage(table, result)
+        console.log(`Created ${table} successfully:`, result)
         return result
       } catch (error) {
         console.error(`Error creating ${table}:`, error)
@@ -195,6 +196,7 @@ class DatabaseService {
     }
     items.push(newItem)
     localStorage.setItem(this.getStorageKey(table), JSON.stringify(items))
+    console.log(`Created ${table} offline:`, newItem)
     return newItem
   }
 

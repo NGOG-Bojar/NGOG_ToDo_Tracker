@@ -27,8 +27,8 @@ function taskReducer(state, action) {
       };
     case 'ADD_TASK':
       const newTask = {
-        ...action.payload.taskData,
         id: action.payload.id,
+        ...action.payload.taskData,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'open'
@@ -158,7 +158,7 @@ export function TaskProvider({ children }) {
       
       dispatch({
         type: 'ADD_TASK',
-        payload: { taskData: newTask, id: newTask.id }
+        payload: { taskData, id: newTask.id }
       });
       
       return newTask;
@@ -171,6 +171,22 @@ export function TaskProvider({ children }) {
           table: 'tasks',
           data: { ...taskData, status: 'open' }
         });
+        
+        // Create local task immediately for offline mode
+        const localTask = {
+          ...taskData,
+          id: crypto.randomUUID(),
+          status: 'open',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        dispatch({
+          type: 'ADD_TASK',
+          payload: { taskData: localTask, id: localTask.id }
+        });
+        
+        return localTask;
       }
       throw error;
     }
