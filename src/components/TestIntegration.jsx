@@ -187,70 +187,90 @@ function TestIntegration({ onClose }) {
     {
       id: 'database-schema',
       name: 'Database Schema Validation',
-      // Create a timeout promise that rejects after 5 seconds
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Schema validation timed out')), 5000);
-          'categories', 'tasks', 'projects', 'project_activity_logs',
-          'activity_log_categories', 'events', 'user_settings'
-        ];
+      description: 'Verify all required database tables exist and are accessible',
+      test: async () => {
+        // Create a timeout promise that rejects after 5 seconds
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Schema validation timed out')), 5000);
+        });
         
-        const tableResults = {};
-        let tablesFound = 0;
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Schema validation timeout after 10 seconds')), 10000)
-        );
-        
-        for (const table of requiredTables) {
-          try {
-            // Quick existence check - just try to create a query
-            const query = supabase.from(table).select('id').limit(1);
-            
-            // Try to execute with very short timeout
-            const quickCheck = new Promise((resolve, reject) => {
-              setTimeout(() => reject(new Error('Table check timeout')), 2000);
-            });
-            
-            const queryPromise = query.then(result => {
-              if (result.error && result.error.code === '42P01') {
-                // Table doesn't exist
-                return { exists: false, error: result.error };
-              }
-              return { exists: true, data: result.data };
-            });
+        const validationPromise = (async () => {
+          const requiredTables = [
+            'categories', 'tasks', 'projects', 'project_activity_logs',
+            'activity_log_categories', 'events', 'user_settings'
+          ];
+          
+          const tableResults = {};
+          let tablesFound = 0;
+          
+          for (const table of requiredTables) {
+            try {
+              // Quick existence check - just try to create a query
+              const query = supabase.from(table).select('id').limit(1);
+              
+              // Try to execute with very short timeout
+              const quickCheck = new Promise((resolve, reject) => {
+                setTimeout(() => reject(new Error('Table check timeout')), 2000);
+              });
+              
+              const queryPromise = query.then(result => {
+                if (result.error && result.error.code === '42P01') {
+                  // Table doesn't exist
+                  return { exists: false, error: result.error };
+                }
+                return { exists: true, data: result.data };
+              });
 
-            const result = await Promise.race([queryPromise, quickCheck]);
-            
-            const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-            
-            if (result.exists) {
-              tableResults[table] = { exists: true };
-              tablesFound++;
-            if (error.message.includes('timeout')) {
-              tableResults[table] = 'Timeout - may need migration';
-            } else {
-              tableResults[table] = `Exception: ${error.message}`;
+              const result = await Promise.race([queryPromise, quickCheck]);
+              
+              if (result.exists) {
+                tableResults[table] = { exists: true };
+                tablesFound++;
+              } else {
+                tableResults[table] = { exists: false, error: result.error?.message || 'Table not found' };
+              }
+            } catch (error) {
+              if (error.message === 'Table check timeout') {
+                tableResults[table] = { exists: false, error: 'Check timed out - table may not exist' };
+              } else {
+                tableResults[table] = { exists: false, error: error.message };
+              }
             }
           }
+          
+          return { tableResults, tablesFound, totalTables: requiredTables.length };
+        })();
+        
+        const validation = await Promise.race([validationPromise, timeoutPromise]);
+        const { tableResults, tablesFound, totalTables } = validation;
+        
+        const existingTables = Object.entries(tableResults).filter(([_, result]) => result.exists);
+        const missingTables = Object.entries(tableResults).filter(([_, result]) => !result.exists);
+        
+        if (tablesFound === totalTables) {
+          return {
+            status: 'success',
+            message: `All ${tablesFound} required tables exist`,
+            details: {
+              tables: tableResults,
+              summary: `${tablesFound}/${totalTables} tables found`
+            }
+          };
+        } else if (tablesFound > 0) {
+          return {
+            status: 'warning',
+            message: `Partial schema found: ${tablesFound}/${totalTables} tables exist`,
+            details: {
+              tables: tableResults,
+              summary: `${tablesFound}/${totalTables} tables found`,
+              existing: existingTables.map(([name]) => name),
+              missing: missingTables.map(([name]) => name)
+            },
+            warnings: ['Some required tables are missing. Please apply migrations using run-migrations.md']
+          };
+        } else {
+          throw new Error('No required tables found - migrations need to be applied');
         }
-        
-        const accessibleTables = Object.values(tableResults).filter(status => status === 'Accessible').length;
-        const timeoutTables = Object.values(tableResults).filter(status => status.includes('Timeout')).length;
-        
-        // If we have timeouts, it might be a migration issue, not a failure
-        if (accessibleTables === 0 && timeoutTables > 0) {
-          throw new Error(`Database schema validation timed out. Please ensure migrations are applied. See run-migrations.md`);
-        }
-        
-        if (accessibleTables === 0) {
-          throw new Error(`No tables accessible. Database may not be set up. See run-migrations.md`);
-        }
-        
-        return {
-          totalTables: requiredTables.length,
-          accessibleTables,
-          timeoutTables,
-          tableStatus: tableResults
-        };
       }
     },
     {
@@ -747,65 +767,35 @@ function TestIntegration({ onClose }) {
         console.error(`Test ${test.name} failed:`, error);
         setResults(prev => ({
           ...prev,
-              tableResults[table] = { exists: false, error: result.error?.message || 'Table not found' };
+          [test.id]: { status: 'error', result: null, error: error.message }
         }));
-        
-            if (error.message === 'Table check timeout') {
-              tableResults[table] = { exists: false, error: 'Check timed out - table may not exist' };
-            } else {
-              tableResults[table] = { exists: false, error: error.message };
-            }
         console.log('Continuing with remaining tests...');
       }
       
-        return { tableResults, tablesFound, totalTables: requiredTables.length };
+      // Small delay between tests
       await new Promise(resolve => setTimeout(resolve, 800));
     }
-      const validation = await Promise.race([validationPromise, timeoutPromise]);
-      const { tableResults, tablesFound, totalTables } = validation;
+    
     // Cleanup test data
-      const existingTables = Object.entries(tableResults).filter(([_, result]) => result.exists);
-      const missingTables = Object.entries(tableResults).filter(([_, result]) => !result.exists);
+    await cleanupTestData();
+    setIsRunning(false);
     setCurrentTest(null);
-      if (tablesFound === totalTables) {
     console.log('Comprehensive test suite completed');
-        results.message = `All ${tablesFound} required tables exist`;
+  };
 
   const cleanupTestData = async () => {
-          summary: `${tablesFound}/${totalTables} tables found`
     const { categoryId, taskId, projectId, activityCategoryId, eventId } = testData;
-      } else if (tablesFound > 0) {
-        results.status = 'warning';
-        results.message = `Partial schema found: ${tablesFound}/${totalTables} tables exist`;
-        results.details = {
-          tables: tableResults,
-          summary: `${tablesFound}/${totalTables} tables found`,
-          existing: existingTables.map(([name]) => name),
-          missing: missingTables.map(([name]) => name)
-        };
-        results.warnings.push('Some required tables are missing. Please apply migrations using run-migrations.md');
-      } else {
+    
     try {
-        results.message = 'No required tables found - migrations need to be applied';
       if (taskId) await deleteTask(taskId);
       if (projectId) await deleteProject(projectId);
-          summary: `${tablesFound}/${totalTables} tables found`,
-          missing: missingTables.map(([name, result]) => ({ name, error: result.error })),
-          help: 'Please apply database migrations using the instructions in run-migrations.md'
+      if (categoryId) await deleteCategory(categoryId);
       if (activityCategoryId) await deleteActivityLogCategory(activityCategoryId);
+      if (eventId) await deleteEvent(eventId);
       
-      if (error.message === 'Schema validation timed out') {
-        results.status = 'failed';
-        results.message = 'Schema validation timed out - database may be unavailable';
-        results.details = { 
-          error: 'Validation timed out after 5 seconds',
-          help: 'Check database connection and ensure migrations are applied (see run-migrations.md)'
-        };
-      } else {
-        results.status = 'failed';
-        results.message = error.message;
-        results.details = { error: error.message };
-      }
+      console.log('Test data cleanup completed');
+    } catch (error) {
+      console.warn('Some test data could not be cleaned up:', error);
     }
   };
 
