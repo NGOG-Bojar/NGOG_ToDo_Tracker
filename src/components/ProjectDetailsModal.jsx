@@ -11,29 +11,15 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import DOMPurify from 'dompurify';
 
-const {
-  FiX,
-  FiPlus,
-  FiUser,
-  FiMail,
-  FiPhone,
-  FiLink,
-  FiUnlink,
-  FiMessageSquare,
-  FiCalendar,
-  FiActivity,
-  FiEdit3,
-  FiTrash2,
-  FiTag,
-  FiEye,
-  FiCheck
+const { 
+  FiX, FiPlus, FiUser, FiMail, FiPhone, FiLink, FiUnlink, FiMessageSquare, 
+  FiCalendar, FiActivity, FiEdit3, FiTrash2, FiTag, FiEye, FiCheck
 } = FiIcons;
 
 function ProjectDetailsModal({ project, onClose, onEdit }) {
   const { STATUS_COLORS, addActivityLog, linkTaskToProject, unlinkTaskFromProject, deleteActivityLog } = useProject();
   const { tasks, addTask, updateTask, toggleTaskStatus } = useTask();
   const { getActiveActivityLogCategories, getActivityLogCategoryById } = useActivityLogCategory();
-
   const [activeTab, setActiveTab] = useState('overview');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -41,19 +27,18 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
   const [activityMessage, setActivityMessage] = useState('');
   const [activityCategory, setActivityCategory] = useState('general');
   const [showLinkTaskModal, setShowLinkTaskModal] = useState(false);
-
   // State to force refresh of linked tasks
   const [refreshKey, setRefreshKey] = useState(0);
 
   const activeActivityLogCategories = getActiveActivityLogCategories();
 
   // Refresh linked tasks whenever tasks change or when refreshKey changes
-  const linkedTasks = tasks.filter(
-    task => project?.linkedTasks && project.linkedTasks.includes(task.id)
+  const linkedTasks = tasks.filter(task => 
+    project?.linkedTasks && project.linkedTasks.includes(task.id)
   );
 
-  const availableTasksToLink = tasks.filter(
-    task => !project?.linkedTasks || !project.linkedTasks.includes(task.id)
+  const availableTasksToLink = tasks.filter(task => 
+    !project?.linkedTasks || !project.linkedTasks.includes(task.id)
   );
 
   if (!project) return null;
@@ -73,13 +58,13 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
   const handleCreateTask = (taskData) => {
     // Create the task and get the returned task object
     const newTask = addTask(taskData);
-
+    
     // Link the new task to the project using the returned task's ID
     linkTaskToProject(project.id, newTask.id, taskData.title);
-
+    
     // Close the modal
     setShowTaskModal(false);
-
+    
     // Force refresh of linked tasks
     setRefreshKey(prev => prev + 1);
   };
@@ -87,14 +72,12 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
   const handleUpdateTask = (taskId, updates) => {
     updateTask(taskId, updates);
     setEditingTask(null);
-
     // Force refresh of linked tasks
     setRefreshKey(prev => prev + 1);
   };
 
   const handleToggleTaskStatus = (taskId) => {
     toggleTaskStatus(taskId);
-
     // Force refresh of linked tasks
     setRefreshKey(prev => prev + 1);
   };
@@ -109,7 +92,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
       auto: false,
       category: activityCategory
     });
-
     setActivityMessage('');
     setActivityCategory('general');
     setShowActivityForm(false);
@@ -126,7 +108,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     if (task) {
       linkTaskToProject(project.id, taskId, task.title);
       setShowLinkTaskModal(false);
-
       // Force refresh of linked tasks
       setRefreshKey(prev => prev + 1);
     }
@@ -136,7 +117,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     const task = tasks.find(t => t.id === taskId);
     if (task) {
       unlinkTaskFromProject(project.id, taskId, task.title);
-
       // Force refresh of linked tasks
       setRefreshKey(prev => prev + 1);
     }
@@ -170,17 +150,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
     { id: 'activity', label: 'Activity Log', icon: FiMessageSquare }
   ];
 
-  // Helper function to safely format dates
-  const safeFormatDate = (dateString) => {
-    if (!dateString) return 'Unknown date';
-    try {
-      return format(new Date(dateString), 'MMM dd, yyyy');
-    } catch (error) {
-      console.error("Error formatting date:", error, dateString);
-      return 'Invalid date';
-    }
-  };
-
   return (
     <AnimatePresence>
       <motion.div
@@ -200,13 +169,13 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center space-x-3">
-              <div
-                className="w-6 h-6 rounded-full"
-                style={{ backgroundColor: project.color || '#3B82F6' }}
+              <div 
+                className="w-6 h-6 rounded-full" 
+                style={{ backgroundColor: project.color || '#3B82F6' }} 
               />
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">{project.title}</h2>
-                <span
+                <span 
                   className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white mt-1"
                   style={{ backgroundColor: STATUS_COLORS[project.status] || '#6B7280' }}
                 >
@@ -267,18 +236,17 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                     {project.description || 'No description provided.'}
                   </p>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="font-medium text-gray-900">Created</h4>
                     <p className="text-sm text-gray-600">
-                      {project.createdAt ? safeFormatDate(project.createdAt) : 'Unknown date'}
+                      {format(parseISO(project.createdAt), 'MMM dd, yyyy')}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="font-medium text-gray-900">Last Updated</h4>
                     <p className="text-sm text-gray-600">
-                      {project.updatedAt ? safeFormatDate(project.updatedAt) : 'Unknown date'}
+                      {format(parseISO(project.updatedAt), 'MMM dd, yyyy')}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -296,7 +264,6 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900">Participants</h3>
                 </div>
-
                 {project.participants && project.participants.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {project.participants.map((participant) => (
@@ -355,57 +322,52 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                     </button>
                   </div>
                 </div>
-
                 {linkedTasks.length > 0 ? (
                   <div className="space-y-3">
                     {linkedTasks.map((task) => (
-                      <div
-                        key={task.id}
+                      <div 
+                        key={task.id} 
                         className="p-3 border rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
-                            <button
+                            <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleToggleTaskStatus(task.id);
                               }}
                               className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
-                                task.status === 'completed'
-                                  ? 'bg-green-500 border-green-500 text-white'
+                                task.status === 'completed' 
+                                  ? 'bg-green-500 border-green-500 text-white' 
                                   : 'border-gray-300 hover:border-green-500'
                               }`}
                             >
-                              {task.status === 'completed' && (
-                                <SafeIcon icon={FiCheck} className="text-white text-xs" />
-                              )}
+                              {task.status === 'completed' && <SafeIcon icon={FiCheck} className="text-white text-xs" />}
                             </button>
                             <div>
-                              <h4
+                              <h4 
                                 className={`font-medium ${
-                                  task.status === 'completed'
-                                    ? 'line-through text-gray-500'
+                                  task.status === 'completed' 
+                                    ? 'line-through text-gray-500' 
                                     : 'text-gray-900'
                                 }`}
                               >
                                 {task.title}
                               </h4>
                               <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
-                                <span
-                                  className={`px-2 py-1 rounded-full ${
-                                    task.priority === 'urgent'
-                                      ? 'bg-red-100 text-red-600'
-                                      : task.priority === 'high'
-                                      ? 'bg-orange-100 text-orange-600'
-                                      : task.priority === 'medium'
-                                      ? 'bg-yellow-100 text-yellow-600'
-                                      : 'bg-green-100 text-green-600'
-                                  }`}
-                                >
+                                <span className={`px-2 py-1 rounded-full ${
+                                  task.priority === 'urgent' 
+                                    ? 'bg-red-100 text-red-600' 
+                                    : task.priority === 'high' 
+                                    ? 'bg-orange-100 text-orange-600' 
+                                    : task.priority === 'medium' 
+                                    ? 'bg-yellow-100 text-yellow-600' 
+                                    : 'bg-green-100 text-green-600'
+                                }`}>
                                   {task.priority}
                                 </span>
-                                {task.dueDate && task.dueDate !== 'undefined' && (
-                                  <span>Due: {safeFormatDate(task.dueDate)}</span>
+                                {task.dueDate && (
+                                  <span>Due: {format(parseISO(task.dueDate), 'MMM dd, yyyy')}</span>
                                 )}
                               </div>
                             </div>
@@ -433,14 +395,14 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                             </button>
                           </div>
                         </div>
+                        
                         {/* Task Description Preview (if available) */}
                         {task.description && (
-                          <div
+                          <div 
                             className="mt-2 text-sm text-gray-600 rich-text-content line-clamp-2 pl-8"
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                DOMPurify.sanitize(task.description).substring(0, 150) +
-                                (task.description.length > 150 ? '...' : '')
+                            dangerouslySetInnerHTML={{ 
+                              __html: DOMPurify.sanitize(task.description).substring(0, 150) + 
+                                (task.description.length > 150 ? '...' : '') 
                             }}
                           />
                         )}
@@ -531,14 +493,10 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                       .map((entry) => {
                         const category = getActivityLogCategoryById(entry.category || 'general');
-                        const sanitizedMessage = entry.message
-                          ? DOMPurify.sanitize(entry.message)
-                          : '';
+                        const sanitizedMessage = entry.message ? DOMPurify.sanitize(entry.message) : '';
+                        
                         return (
-                          <div
-                            key={entry.id}
-                            className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg"
-                          >
+                          <div key={entry.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
                             <div className="flex items-center space-x-2">
                               <SafeIcon icon={FiCalendar} className="text-gray-400 mt-1" />
                               {category && (
@@ -552,13 +510,13 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                               )}
                             </div>
                             <div className="flex-1">
-                              <div
+                              <div 
                                 className="text-sm text-gray-900 rich-text-content"
                                 dangerouslySetInnerHTML={{ __html: sanitizedMessage }}
                               />
                               <div className="flex items-center justify-between mt-1">
                                 <p className="text-xs text-gray-500">
-                                  {entry.timestamp ? safeFormatDate(entry.timestamp) + ' ' : ''}
+                                  {format(parseISO(entry.timestamp), 'MMM dd, yyyy HH:mm')}
                                   {entry.auto && ' • Auto-generated'}
                                 </p>
                                 {!entry.auto && (
@@ -623,6 +581,7 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                   <SafeIcon icon={FiX} className="text-lg" />
                 </button>
               </div>
+              
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {availableTasksToLink.length > 0 ? (
                   availableTasksToLink.map((task) => (
@@ -641,6 +600,7 @@ function ProjectDetailsModal({ project, onClose, onEdit }) {
                   <p className="text-gray-500 text-center py-4">No available tasks to link.</p>
                 )}
               </div>
+              
               <div className="flex justify-end mt-4">
                 <button
                   onClick={() => setShowLinkTaskModal(false)}

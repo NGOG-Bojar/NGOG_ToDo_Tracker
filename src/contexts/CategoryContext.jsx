@@ -1,59 +1,61 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { categoryService } from '../services/api';
+import { v4 as uuidv4 } from 'uuid';
 
 const CategoryContext = createContext();
 
+// Empty initial state - no default categories
 const initialState = {
-  categories: [],
-  isLoading: false,
-  error: null
+  categories: []
 };
 
 function categoryReducer(state, action) {
   switch (action.type) {
-    case 'SET_LOADING':
-      return { ...state, isLoading: action.payload };
-    case 'SET_ERROR':
-      return { ...state, error: action.payload, isLoading: false };
     case 'LOAD_CATEGORIES':
-      return { ...state, categories: action.payload, isLoading: false, error: null };
+      return { ...state, categories: action.payload };
     case 'ADD_CATEGORY':
       return {
         ...state,
-        categories: [...state.categories, action.payload],
-        isLoading: false,
-        error: null
+        categories: [
+          ...state.categories,
+          {
+            id: uuidv4(),
+            name: action.payload.name,
+            color: action.payload.color,
+            deleted: false
+          }
+        ]
       };
     case 'UPDATE_CATEGORY':
       return {
         ...state,
         categories: state.categories.map(category =>
-          category.id === action.payload.id ? { ...category, ...action.payload } : category
-        ),
-        isLoading: false,
-        error: null
+          category.id === action.payload.id
+            ? { ...category, ...action.payload.updates }
+            : category
+        )
       };
     case 'DELETE_CATEGORY':
       return {
         ...state,
         categories: state.categories.map(category =>
-          category.id === action.payload ? 
-          { ...category, deleted: true, deleted_at: new Date().toISOString() } : 
-          category
-        ),
-        isLoading: false,
-        error: null
+          category.id === action.payload
+            ? { ...category, deleted: true, deletedAt: new Date().toISOString() }
+            : category
+        )
       };
     case 'RESTORE_CATEGORY':
       return {
         ...state,
         categories: state.categories.map(category =>
-          category.id === action.payload ? 
-          { ...category, deleted: false, deleted_at: null } : 
-          category
-        ),
-        isLoading: false,
-        error: null
+          category.id === action.payload
+            ? { ...category, deleted: false, deletedAt: null }
+            : category
+        )
+      };
+    case 'PERMANENTLY_DELETE_CATEGORY':
+      return {
+        ...state,
+        categories: state.categories.filter(category => category.id !== action.payload)
       };
     default:
       return state;
@@ -63,64 +65,43 @@ function categoryReducer(state, action) {
 export function CategoryProvider({ children }) {
   const [state, dispatch] = useReducer(categoryReducer, initialState);
 
-  // Load categories from Supabase on mount
+  // Load categories from localStorage on mount
   useEffect(() => {
-    const loadCategories = async () => {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      try {
-        const categories = await categoryService.getAllCategories();
-        dispatch({ type: 'LOAD_CATEGORIES', payload: categories });
-      } catch (error) {
-        console.error('Error loading categories:', error);
-        dispatch({ type: 'SET_ERROR', payload: error.message });
-      }
-    };
-
-    loadCategories();
+    const savedCategories = localStorage.getItem('todoCategories');
+    if (savedCategories) {
+      dispatch({ type: 'LOAD_CATEGORIES', payload: JSON.parse(savedCategories) });
+    }
   }, []);
 
-  const addCategory = async (name, color) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    try {
-      const newCategory = await categoryService.createCategory({ name, color });
-      dispatch({ type: 'ADD_CATEGORY', payload: newCategory });
-    } catch (error) {
-      console.error('Error adding category:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
-    }
+  // Save categories to localStorage whenever categories change
+  useEffect(() => {
+    localStorage.setItem('todoCategories', JSON.stringify(state.categories));
+  }, [state.categories]);
+
+  const addCategory = (name, color) => {
+    dispatch({
+      type: 'ADD_CATEGORY',
+      payload: { name, color }
+    });
   };
 
-  const updateCategory = async (id, updates) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    try {
-      const updatedCategory = await categoryService.updateCategory(id, updates);
-      dispatch({ type: 'UPDATE_CATEGORY', payload: updatedCategory });
-    } catch (error) {
-      console.error('Error updating category:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
-    }
+  const updateCategory = (id, updates) => {
+    dispatch({
+      type: 'UPDATE_CATEGORY',
+      payload: { id, updates }
+    });
   };
 
-  const deleteCategory = async (id) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    try {
-      await categoryService.deleteCategory(id);
-      dispatch({ type: 'DELETE_CATEGORY', payload: id });
-    } catch (error) {
-      console.error('Error deleting category:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
-    }
+  const deleteCategory = (id) => {
+    dispatch({ type: 'DELETE_CATEGORY', payload: id });
   };
 
-  const restoreCategory = async (id) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    try {
-      await categoryService.restoreCategory(id);
-      dispatch({ type: 'RESTORE_CATEGORY', payload: id });
-    } catch (error) {
-      console.error('Error restoring category:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
-    }
+  const restoreCategory = (id) => {
+    dispatch({ type: 'RESTORE_CATEGORY', payload: id });
+  };
+
+  const permanentlyDeleteCategory = (id) => {
+    dispatch({ type: 'PERMANENTLY_DELETE_CATEGORY', payload: id });
   };
 
   const getCategoryById = (id) => {
@@ -133,6 +114,7 @@ export function CategoryProvider({ children }) {
     updateCategory,
     deleteCategory,
     restoreCategory,
+    permanentlyDeleteCategory,
     getCategoryById
   };
 

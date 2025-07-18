@@ -12,19 +12,17 @@ const { FiX, FiPlus, FiTrash2, FiCheck, FiCalendar, FiArrowUp, FiArrowDown, FiMo
 
 function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
   const { categories } = useCategory();
-  const { projects } = useProject();
-  
+  const { projects, linkTaskToProject } = useProject();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    due_date: '',
+    dueDate: '',
     priority: 'medium',
     categories: [],
     notes: '',
     checklist: [],
-    linked_project: preselectedProject
+    linkedProject: preselectedProject // Auto-select the project if provided
   });
-  
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverItem, setDragOverItem] = useState(null);
 
@@ -33,50 +31,45 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
       setFormData({
         title: task.title || '',
         description: task.description || '',
-        due_date: task.due_date || '',
+        dueDate: task.dueDate || '',
         priority: task.priority || 'medium',
         categories: task.categories || [],
         notes: task.notes || '',
         checklist: task.checklist || [],
-        linked_project: task.linked_project || preselectedProject
+        linkedProject: task.linkedProject || preselectedProject
       });
     } else {
+      // For new tasks, set the preselected project
       setFormData(prev => ({
         ...prev,
-        linked_project: preselectedProject
+        linkedProject: preselectedProject
       }));
     }
   }, [task, preselectedProject]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
-    
-    try {
-      const taskData = {
-        title: formData.title.trim(),
-        description: formData.description || null,
-        due_date: formData.due_date || null,
-        priority: formData.priority || 'medium',
-        categories: formData.categories || [],
-        notes: formData.notes?.trim() || null,
-        checklist: formData.checklist || [],
-        linked_project: formData.linked_project || null,
-      };
+
+    const taskData = {
+      ...formData,
+      title: formData.title.trim(),
+      notes: formData.notes.trim()
+    };
+
+    if (task) {
+      onSave(task.id, taskData);
+    } else {
+      // For new tasks, we need to handle the project linking properly
+      const newTask = onSave(taskData);
       
-      console.log('Submitting task data:', taskData);
-      
-      if (task) {
-        await onSave(task.id, taskData);
-      } else {
-        await onSave(taskData);
+      // If there's a linked project and we have the new task, link it
+      if (formData.linkedProject && newTask) {
+        linkTaskToProject(formData.linkedProject, newTask.id, taskData.title);
       }
-      
-      onClose();
-    } catch (error) {
-      console.error('Error saving task:', error);
-      alert('Failed to save task. Please try again.');
     }
+    
+    onClose();
   };
 
   const handleCategoryToggle = (categoryId) => {
@@ -114,6 +107,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
     }));
   };
 
+  // Move checklist item up
   const moveItemUp = (id) => {
     setFormData(prev => {
       const checklist = [...prev.checklist];
@@ -125,6 +119,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
     });
   };
 
+  // Move checklist item down
   const moveItemDown = (id) => {
     setFormData(prev => {
       const checklist = [...prev.checklist];
@@ -136,6 +131,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
     });
   };
 
+  // Improved drag and drop functionality
   const handleDragStart = (e, id) => {
     setDraggedItem(id);
     e.dataTransfer.effectAllowed = 'move';
@@ -156,6 +152,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
   };
 
   const handleDragLeave = (e) => {
+    // Only clear drag over if we're leaving the container entirely
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setDragOverItem(null);
     }
@@ -168,20 +165,22 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
       setDragOverItem(null);
       return;
     }
-    
+
     setFormData(prev => {
       const checklist = [...prev.checklist];
       const draggedIndex = checklist.findIndex(item => item.id === draggedItem);
       const dropIndex = checklist.findIndex(item => item.id === dropId);
-      
+
       if (draggedIndex === -1 || dropIndex === -1) return prev;
-      
+
+      // Remove the dragged item
       const [draggedItemData] = checklist.splice(draggedIndex, 1);
+      // Insert it at the drop position
       checklist.splice(dropIndex, 0, draggedItemData);
-      
+
       return { ...prev, checklist };
     });
-    
+
     setDraggedItem(null);
     setDragOverItem(null);
   };
@@ -191,6 +190,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
     setDragOverItem(null);
   };
 
+  // Rich text editor modules configuration
   const modules = {
     toolbar: [
       ['bold', 'italic', 'underline', 'strike'],
@@ -204,11 +204,12 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
     'bold', 'italic', 'underline', 'strike', 'list', 'bullet', 'link'
   ];
 
+  // Quick date setter functions
   const setQuickDate = (daysToAdd) => {
     const targetDate = addDays(new Date(), daysToAdd);
     setFormData(prev => ({
       ...prev,
-      due_date: format(targetDate, 'yyyy-MM-dd')
+      dueDate: format(targetDate, 'yyyy-MM-dd')
     }));
   };
 
@@ -216,7 +217,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
     const targetDate = addWeeks(new Date(), weeksToAdd);
     setFormData(prev => ({
       ...prev,
-      due_date: format(targetDate, 'yyyy-MM-dd')
+      dueDate: format(targetDate, 'yyyy-MM-dd')
     }));
   };
 
@@ -247,7 +248,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
               <SafeIcon icon={FiX} className="text-xl" />
             </button>
           </div>
-          
+
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -261,7 +262,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 required
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Description
@@ -278,7 +279,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -287,10 +288,11 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 <div className="space-y-3">
                   <input
                     type="date"
-                    value={formData.due_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
+                    value={formData.dueDate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  {/* Quick Date Buttons */}
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -319,7 +321,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                   </div>
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Priority
@@ -336,7 +338,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 </select>
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Categories
@@ -353,9 +355,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                         : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
                     }`}
                     style={{
-                      backgroundColor: formData.categories.includes(category.id)
-                        ? category.color
-                        : undefined
+                      backgroundColor: formData.categories.includes(category.id) ? category.color : undefined
                     }}
                   >
                     {category.name}
@@ -363,7 +363,8 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 ))}
               </div>
             </div>
-            
+
+            {/* Project Linking */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Link to Project
@@ -372,10 +373,10 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 )}
               </label>
               <select
-                value={formData.linked_project}
-                onChange={(e) => setFormData(prev => ({ ...prev, linked_project: e.target.value }))}
+                value={formData.linkedProject}
+                onChange={(e) => setFormData(prev => ({ ...prev, linkedProject: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={!!preselectedProject}
+                disabled={!!preselectedProject} // Disable if preselected
               >
                 <option value="">No project selected</option>
                 {projects.map(project => (
@@ -385,7 +386,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 ))}
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Notes
@@ -398,7 +399,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 placeholder="Additional notes..."
               />
             </div>
-            
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -413,7 +414,6 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                   <span>Add Item</span>
                 </button>
               </div>
-              
               <div className="space-y-2">
                 {formData.checklist.map((item, index) => (
                   <div
@@ -436,7 +436,6 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                     <div className="cursor-move text-gray-400 hover:text-gray-600 p-1">
                       <SafeIcon icon={FiMove} className="text-sm" />
                     </div>
-                    
                     <button
                       type="button"
                       onClick={() => updateChecklistItem(item.id, { completed: !item.completed })}
@@ -448,7 +447,6 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                     >
                       <SafeIcon icon={FiCheck} className="text-sm" />
                     </button>
-                    
                     <input
                       type="text"
                       value={item.text}
@@ -458,22 +456,18 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                       }`}
                       placeholder="Checklist item..."
                     />
-                    
                     <div className="flex space-x-1 flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => moveItemUp(item.id)}
                         disabled={index === 0}
                         className={`p-1 rounded hover:bg-gray-100 transition-colors ${
-                          index === 0
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-gray-400 hover:text-blue-600'
+                          index === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'
                         }`}
                         title="Move Up"
                       >
                         <SafeIcon icon={FiArrowUp} className="text-sm" />
                       </button>
-                      
                       <button
                         type="button"
                         onClick={() => moveItemDown(item.id)}
@@ -487,7 +481,6 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                       >
                         <SafeIcon icon={FiArrowDown} className="text-sm" />
                       </button>
-                      
                       <button
                         type="button"
                         onClick={() => removeChecklistItem(item.id)}
@@ -501,7 +494,7 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
                 ))}
               </div>
             </div>
-            
+
             <div className="flex justify-end space-x-3 pt-4 border-t">
               <button
                 type="button"
@@ -510,7 +503,6 @@ function TaskModal({ task, onClose, onSave, preselectedProject = '' }) {
               >
                 Cancel
               </button>
-              
               <button
                 type="submit"
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
