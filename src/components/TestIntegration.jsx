@@ -77,6 +77,34 @@ function TestIntegration({ onClose }) {
       }
     },
     {
+      id: 'database-initialization',
+      name: 'Database Initialization',
+      description: 'Test database setup and user initialization',
+      test: async () => {
+        try {
+          const { data, error } = await supabase.functions.invoke('setup-database', {
+            headers: {
+              Authorization: `Bearer ${session?.access_token}`,
+            },
+          });
+          
+          if (error) {
+            throw new Error(`Database initialization failed: ${error.message}`);
+          }
+          
+          return {
+            setupSuccessful: !!data?.success,
+            tablesCreated: data?.tables_created?.length || 0,
+            defaultDataCreated: data?.default_data_created || {},
+            userId: data?.user_id
+          };
+        } catch (error) {
+          console.error('Database initialization test failed:', error);
+          throw error;
+        }
+      }
+    },
+    {
       id: 'simple-query-test',
       name: 'Simple Query Test',
       description: 'Test a basic database query',

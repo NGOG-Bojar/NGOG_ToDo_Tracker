@@ -18,29 +18,25 @@ function DatabaseSetup({ onComplete }) {
     setSetupMessage('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-database`, {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('setup-database', {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
         },
       });
 
-      const result = await response.json();
-
-      if (response.ok && result.success) {
+      if (!error && data?.success) {
         setSetupStatus('success');
-        setSetupMessage('Database setup completed successfully!');
+        setSetupMessage(`Database setup completed! Created ${data.tables_created?.length || 0} tables and default data.`);
         setTimeout(() => {
           onComplete();
         }, 2000);
       } else {
         setSetupStatus('error');
-        setSetupMessage(result.error || 'Setup failed');
+        setSetupMessage(error?.message || data?.error || 'Setup failed');
       }
     } catch (error) {
       setSetupStatus('error');
-      setSetupMessage('Failed to connect to setup service');
+      setSetupMessage(`Setup failed: ${error.message}`);
     } finally {
       setIsSetupRunning(false);
     }

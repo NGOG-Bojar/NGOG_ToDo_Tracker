@@ -45,16 +45,31 @@ export const AuthProvider = ({ children }) => {
   // Initialize default data for new users
   const initializeUserData = async (userId) => {
     try {
-      // Call the database function to create default categories and settings
-      const { error } = await supabase.rpc('initialize_user_data', {
-        user_id: userId
+      // Try to call the database function to create default categories and settings
+      const { data, error } = await supabase.functions.invoke('setup-database', {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
       })
       
       if (error) {
-        console.error('Error initializing user data:', error)
+        console.error('Error initializing user data via edge function:', error)
+        
+        // Fallback: try direct RPC call
+        const { error: rpcError } = await supabase.rpc('initialize_user_data', {
+          user_id: userId
+        })
+        
+        if (rpcError) {
+          console.error('Error with direct RPC call:', rpcError)
+          // Don't throw error - user can still use the app
+        }
+      } else {
+        console.log('User data initialized successfully:', data)
       }
     } catch (error) {
       console.error('Error initializing user data:', error)
+      // Don't throw error - user can still use the app without default data
     }
   }
 

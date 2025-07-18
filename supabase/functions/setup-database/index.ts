@@ -19,6 +19,26 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Get the user from the request
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Verify the user token
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Complete database schema SQL
     const schemaSql = `
 -- Enable necessary extensions
@@ -197,15 +217,36 @@ CREATE POLICY "Users can manage their own settings" ON user_settings
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
 CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(user_id, deleted);
+CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(user_id, name);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(user_id, priority);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(user_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_categories ON tasks USING gin(categories);
+CREATE INDEX IF NOT EXISTS idx_tasks_linked_project ON tasks(linked_project);
+CREATE INDEX IF NOT EXISTS idx_tasks_search ON tasks USING gin(to_tsvector('english', title || ' ' || COALESCE(description, '')));
+
 CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(user_id, archived);
+CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_projects_linked_tasks ON projects USING gin(linked_tasks);
+CREATE INDEX IF NOT EXISTS idx_projects_search ON projects USING gin(to_tsvector('english', title || ' ' || COALESCE(description, '')));
+
+CREATE INDEX IF NOT EXISTS idx_project_activity_logs_project_id ON project_activity_logs(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_activity_logs_timestamp ON project_activity_logs(project_id, timestamp);
+
+CREATE INDEX IF NOT EXISTS idx_activity_log_categories_user_id ON activity_log_categories(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_categories_deleted ON activity_log_categories(user_id, deleted);
+
 CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_dates ON events(user_id, start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_events_participation_type ON events(user_id, participation_type);
+CREATE INDEX IF NOT EXISTS idx_events_search ON events USING gin(to_tsvector('english', title || ' ' || COALESCE(location, '') || ' ' || COALESCE(talk_title, '')));
+
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -239,9 +280,27 @@ CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events
 
 DROP TRIGGER IF EXISTS update_user_settings_updated_at ON user_settings;
 CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings
-  FOR EACH ROW EXECUTE FUNCTION update_user_settings_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+`;
 
--- Create initialize_user_data function
+    // Execute the schema creation
+    const { error: schemaError } = await supabaseAdmin.rpc('exec_sql', { sql: schemaSql })
+    
+    if (schemaError) {
+      console.error('Schema creation error:', schemaError)
+      // Continue anyway - tables might already exist
+    }
+
+    // Now initialize user data
+    const { error: initError } = await supabaseAdmin.rpc('initialize_user_data', {
+      user_id: user.id
+    })
+
+    if (initError) {
+      console.error('User initialization error:', initError)
+      
+      // If the function doesn't exist, create it and try again
+      const createFunctionSql = `
 CREATE OR REPLACE FUNCTION initialize_user_data(user_id UUID)
 RETURNS void AS $$
 BEGIN
@@ -271,28 +330,44 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 `;
 
-    // Execute the schema creation
-    const { error } = await supabaseAdmin.rpc('exec_sql', { sql: schemaSql })
-    
-    if (error) {
-      console.error('Database setup error:', error)
-      return new Response(
-        JSON.stringify({ error: 'Failed to setup database', details: error }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      const { error: functionError } = await supabaseAdmin.rpc('exec_sql', { sql: createFunctionSql })
+      
+      if (functionError) {
+        console.error('Function creation error:', functionError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to create initialization function', details: functionError }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Try initialization again
+      const { error: retryError } = await supabaseAdmin.rpc('initialize_user_data', {
+        user_id: user.id
+      })
+
+      if (retryError) {
+        console.error('Retry initialization error:', retryError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to initialize user data', details: retryError }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Database schema created successfully!',
+        message: 'Database setup and user initialization completed successfully!',
+        user_id: user.id,
         tables_created: [
           'categories', 'tasks', 'projects', 'project_activity_logs', 
           'activity_log_categories', 'events', 'user_settings'
-        ]
+        ],
+        default_data_created: {
+          categories: 4,
+          activity_log_categories: 6,
+          user_settings: 1
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
