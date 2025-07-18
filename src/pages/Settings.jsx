@@ -5,12 +5,14 @@ import * as FiIcons from 'react-icons/fi';
 import CategoryManager from './CategoryManager';
 import ActivityLogCategoryManager from './ActivityLogCategoryManager';
 import DataManager from '../components/DataManager';
+import TestIntegration from '../components/TestIntegration';
 
 const { FiSettings, FiLock, FiTag, FiDatabase, FiEye, FiEyeOff, FiCheck, FiX, FiKey, FiShield, FiMessageSquare } = FiIcons;
 
 function Settings() {
   const [activeTab, setActiveTab] = useState('password');
   const [showDataManager, setShowDataManager] = useState(false);
+  const [showTestIntegration, setShowTestIntegration] = useState(false);
 
   // Password change form state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -90,7 +92,8 @@ function Settings() {
     { id: 'password', label: 'Password', icon: FiLock },
     { id: 'categories', label: 'Task Categories', icon: FiTag },
     { id: 'activityCategories', label: 'Activity Categories', icon: FiMessageSquare },
-    { id: 'data', label: 'Data Management', icon: FiDatabase }
+    { id: 'data', label: 'Data Management', icon: FiDatabase },
+    { id: 'testing', label: 'Integration Tests', icon: FiSettings }
   ];
 
   return (
@@ -355,6 +358,48 @@ function Settings() {
                 </div>
               </motion.div>
             )}
+
+            {activeTab === 'testing' && (
+              <motion.div
+                key="testing"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="max-w-2xl">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <SafeIcon icon={FiSettings} className="text-purple-600 text-xl" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Integration Testing</h3>
+                      <p className="text-sm text-gray-600">Test Supabase connectivity and data operations</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                    <h4 className="text-sm font-medium text-blue-900 mb-2">Test Coverage:</h4>
+                    <ul className="text-xs text-blue-700 space-y-1">
+                      <li>• Authentication status and session validation</li>
+                      <li>• Database connection and user permissions</li>
+                      <li>• CRUD operations (Create, Read, Update, Delete)</li>
+                      <li>• Offline functionality and sync queue</li>
+                      <li>• Real-time subscriptions and updates</li>
+                      <li>• Error handling and fallback mechanisms</li>
+                    </ul>
+                  </div>
+                  
+                  <button
+                    onClick={() => setShowTestIntegration(true)}
+                    className="flex items-center space-x-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    <SafeIcon icon={FiSettings} className="text-lg" />
+                    <span>Run Integration Tests</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
       </div>
@@ -364,6 +409,13 @@ function Settings() {
         isOpen={showDataManager}
         onClose={() => setShowDataManager(false)}
       />
+
+      {/* Test Integration Modal */}
+      {showTestIntegration && (
+        <TestIntegration
+          onClose={() => setShowTestIntegration(false)}
+        />
+      )}
     </div>
   );
 }

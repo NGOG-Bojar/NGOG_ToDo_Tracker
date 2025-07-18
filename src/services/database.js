@@ -176,10 +176,10 @@ class DatabaseService {
     const items = this.getFromLocalStorage(table)
     const newItem = {
       ...data,
-      id: crypto.randomUUID(),
+      id: this.generateId(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      local_id: crypto.randomUUID() // For sync mapping
+      local_id: this.generateId() // For sync mapping
     }
     items.push(newItem)
     localStorage.setItem(this.getStorageKey(table), JSON.stringify(items))
@@ -220,6 +220,19 @@ class DatabaseService {
     const filteredItems = items.filter(item => item.id !== id)
     localStorage.setItem(this.getStorageKey(table), JSON.stringify(filteredItems))
     return true
+  }
+
+  // Generate UUID (fallback for environments without crypto.randomUUID)
+  generateId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID()
+    }
+    // Fallback UUID generation
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0
+      const v = c == 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
   }
 
   /**

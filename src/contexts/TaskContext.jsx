@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
@@ -26,8 +27,9 @@ function taskReducer(state, action) {
     case 'ADD_TASK':
       const newTask = {
         ...action.payload.taskData,
-        id: action.payload.id || uuidv4(),
+        id: action.payload.id,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         status: 'open'
       };
       return {

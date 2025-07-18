@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
 import { useAuth } from './AuthContext';
@@ -39,14 +40,14 @@ function projectReducer(state, action) {
         projects: [
           ...state.projects,
           {
-            id: uuidv4(),
+            id: action.payload.id,
             ...action.payload,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             archived: false,
             activityLog: [
               {
-                id: uuidv4(),
+                id: action.payload.activityLogId || uuidv4(),
                 type: 'created',
                 message: 'Project created',
                 timestamp: new Date().toISOString(),
@@ -291,12 +292,13 @@ export function ProjectProvider({ children }) {
 
   const addProject = async (projectData) => {
     try {
+      const activityLogId = uuidv4();
       const newProject = await db.create('projects', {
         ...projectData,
         archived: false,
         activityLog: [
           {
-            id: crypto.randomUUID(),
+            id: activityLogId,
             type: 'created',
             message: 'Project created',
             timestamp: new Date().toISOString(),
@@ -306,7 +308,14 @@ export function ProjectProvider({ children }) {
         ]
       });
       
-      dispatch({ type: 'ADD_PROJECT', payload: projectData });
+      dispatch({ 
+        type: 'ADD_PROJECT', 
+        payload: { 
+          ...projectData, 
+          id: newProject.id,
+          activityLogId 
+        } 
+      });
       return newProject;
     } catch (error) {
       console.error('Error adding project:', error);

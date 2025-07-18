@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
 import { useAuth } from './AuthContext';
@@ -20,9 +21,11 @@ function categoryReducer(state, action) {
         categories: [
           ...state.categories,
           {
-            id: uuidv4(),
+            id: action.payload.id,
             name: action.payload.name,
             color: action.payload.color,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             deleted: false
           }
         ]
@@ -103,7 +106,7 @@ export function CategoryProvider({ children }) {
       
       dispatch({
         type: 'ADD_CATEGORY',
-        payload: { name, color }
+        payload: { id: newCategory.id, name, color }
       });
       
       return newCategory;
