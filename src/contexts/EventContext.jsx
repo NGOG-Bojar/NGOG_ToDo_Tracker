@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { db } from '../services/database';
+import { syncService } from '../services/syncService';
+import { useAuth } from './AuthContext';
+import useRealtime from '../hooks/useRealtime';
 
 const EventContext = createContext();
 
@@ -161,33 +165,130 @@ function eventReducer(state, action) {
 
 export function EventProvider({ children }) {
   const [state, dispatch] = useReducer(eventReducer, initialState);
+  const { user } = useAuth();
+
+  // Real-time subscription for events
+  useRealtime('events', (payload) => {
+    console.log('Real-time event update:', payload);
+    
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new && !state.events.find(e => e.id === payload.new.id)) {
+          dispatch({
+            type: 'ADD_EVENT',
+            payload: payload.new
+          });
+        }
+        break;
+      case 'UPDATE':
+        if (payload.new) {
+          dispatch({
+            type: 'UPDATE_EVENT',
+            payload: { id: payload.new.id, updates: payload.new }
+          });
+        }
+        break;
+      case 'DELETE':
+        if (payload.old) {
+          dispatch({
+            type: 'DELETE_EVENT',
+            payload: payload.old.id
+          });
+        }
+        break;
+    }
+  }, [state.events]);
 
   // Load events from localStorage on mount
   useEffect(() => {
-    const savedEvents = localStorage.getItem('todoEvents');
-    if (savedEvents) {
-      dispatch({ type: 'LOAD_EVENTS', payload: JSON.parse(savedEvents) });
-    }
+    loadEvents();
   }, []);
 
-  // Save events to localStorage whenever events change
+  // Listen for data refresh events
   useEffect(() => {
-    localStorage.setItem('todoEvents', JSON.stringify(state.events));
-  }, [state.events]);
+    const handleDataRefresh = () => {
+      loadEvents();
+    };
+
+    window.addEventListener('dataRefresh', handleDataRefresh);
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, []);
+
+  // Load events from database
+  const loadEvents = async () => {
+    try {
+      const events = await db.read('events');
+      dispatch({ type: 'LOAD_EVENTS', payload: events });
+    } catch (error) {
+      console.error('Error loading events:', error);
+    }
+  };
 
   // Add a new event
-  const addEvent = (eventData) => {
-    dispatch({ type: 'ADD_EVENT', payload: eventData });
+  const addEvent = async (eventData) => {
+    try {
+      const newEvent = await db.create('events', {
+        ...eventData,
+        checklist: CHECKLIST_ITEMS.map(item => ({ ...item, completed: false }))
+      });
+      
+      dispatch({
+        type: 'ADD_EVENT',
+        payload: newEvent
+      });
+      
+      return newEvent;
+    } catch (error) {
+      console.error('Error adding event:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'create',
+          table: 'events',
+          data: {
+            ...eventData,
+            checklist: CHECKLIST_ITEMS.map(item => ({ ...item, completed: false }))
+          }
+        });
+      }
+      throw error;
+    }
   };
 
   // Update an existing event
-  const updateEvent = (id, updates) => {
-    dispatch({ type: 'UPDATE_EVENT', payload: { id, updates } });
+  const updateEvent = async (id, updates) => {
+    try {
+      await db.update('events', id, updates);
+      dispatch({ type: 'UPDATE_EVENT', payload: { id, updates } });
+    } catch (error) {
+      console.error('Error updating event:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'events',
+          id,
+          updates
+        });
+      }
+      throw error;
+    }
   };
 
   // Delete an event
-  const deleteEvent = (id) => {
-    dispatch({ type: 'DELETE_EVENT', payload: id });
+  const deleteEvent = async (id) => {
+    try {
+      await db.delete('events', id);
+      dispatch({ type: 'DELETE_EVENT', payload: id });
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'delete',
+          table: 'events',
+          id
+        });
+      }
+      throw error;
+    }
   };
 
   // Toggle a checklist item

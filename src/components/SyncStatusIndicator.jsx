@@ -48,6 +48,7 @@ function SyncStatusIndicator() {
       setSyncStatus('success');
       setTimeout(() => setSyncStatus('idle'), 2000);
     } catch (error) {
+      console.error('Manual sync error:', error);
       setSyncStatus('error');
       setTimeout(() => setSyncStatus('idle'), 3000);
     }

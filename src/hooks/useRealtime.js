@@ -21,8 +21,15 @@ export function useRealtime(table, callback, dependencies = []) {
       console.log(`Real-time update for ${table}:`, payload)
       
       // Only process changes for the current user's data
-      if (payload.new?.user_id === user.id || payload.old?.user_id === user.id) {
-        callback(payload)
+      if (payload.new?.user_id === user.id || payload.old?.user_id === user.id || !payload.new?.user_id) {
+        // Transform Supabase payload to our expected format
+        const transformedPayload = {
+          eventType: payload.eventType,
+          new: payload.new,
+          old: payload.old,
+          table: payload.table
+        }
+        callback(transformedPayload)
       }
     })
 

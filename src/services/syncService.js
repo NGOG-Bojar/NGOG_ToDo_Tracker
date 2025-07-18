@@ -100,8 +100,7 @@ class SyncService {
    * Conflict Resolution
    */
   async resolveConflicts(localData, remoteData) {
-    // Simple last-write-wins strategy for now
-    // In Phase 4, we can implement more sophisticated conflict resolution
+    // Enhanced conflict resolution with user interaction
     
     const conflicts = []
     const resolved = []
@@ -120,8 +119,13 @@ class SyncService {
           // Remote is newer, keep remote
           resolved.push(remoteItem)
         } else {
-          // Same timestamp, potential conflict
-          conflicts.push({ local: localItem, remote: remoteItem })
+          // Same timestamp or significant differences, mark as conflict
+          conflicts.push({ 
+            id: localItem.id,
+            table: 'unknown', // Will be set by caller
+            local: localItem, 
+            remote: remoteItem 
+          })
         }
       } else {
         // Only exists locally
@@ -137,6 +141,18 @@ class SyncService {
     })
 
     return { resolved, conflicts }
+  }
+
+  /**
+   * Show conflict resolution UI
+   */
+  async showConflictResolution(conflicts) {
+    return new Promise((resolve) => {
+      // Dispatch custom event for conflict resolution UI
+      window.dispatchEvent(new CustomEvent('syncConflicts', {
+        detail: { conflicts, resolve }
+      }))
+    })
   }
 
   /**
@@ -177,15 +193,30 @@ class SyncService {
       // Resolve conflicts
       const { resolved, conflicts } = await this.resolveConflicts(localData, remoteData)
       
+      // If there are conflicts, show resolution UI
+      if (conflicts.length > 0) {
+        console.log(`Found ${conflicts.length} conflicts in ${table}`)
+        const resolutions = await this.showConflictResolution(
+          conflicts.map(c => ({ ...c, table }))
+        )
+        
+        // Apply user resolutions
+        Object.entries(resolutions).forEach(([conflictId, resolution]) => {
+          const conflict = conflicts.find(c => c.id === conflictId)
+          if (conflict) {
+            if (resolution === 'local') {
+              resolved.push(conflict.local)
+            } else if (resolution === 'remote') {
+              resolved.push(conflict.remote)
+            }
+          }
+        })
+      }
+      
       // Update localStorage with resolved data
       db.cacheToLocalStorage(table, resolved)
       
-      // Handle conflicts (for now, just log them)
-      if (conflicts.length > 0) {
-        console.warn(`${conflicts.length} conflicts found in ${table}:`, conflicts)
-      }
-      
-      console.log(`Synced ${table}: ${resolved.length} items, ${conflicts.length} conflicts`)
+      console.log(`Synced ${table}: ${resolved.length} items resolved`)
     } catch (error) {
       console.error(`Error syncing ${table}:`, error)
     }

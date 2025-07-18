@@ -313,13 +313,18 @@ class DatabaseService {
   subscribe(table, callback) {
     if (!this.isOnline) return null
     
-    return supabase
+    try {
+      return supabase
       .channel(`${table}_changes`)
       .on('postgres_changes', 
         { event: '*', schema: 'public', table },
         callback
       )
       .subscribe()
+    } catch (error) {
+      console.error(`Error subscribing to ${table}:`, error)
+      return null
+    }
   }
 
   unsubscribe(subscription) {

@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import NotificationBanner from './components/NotificationBanner';
 import AuthGuard from './components/auth/AuthGuard';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
+import SyncConflictHandler from './components/SyncConflictHandler';
 import { TaskProvider } from './contexts/TaskContext';
 import { CategoryProvider } from './contexts/CategoryContext';
 import { ProjectProvider } from './contexts/ProjectContext';
@@ -56,6 +57,7 @@ function App() {
                         </Routes>
                       </motion.main>
                       <SyncStatusIndicator />
+                      <SyncConflictHandler />
                     </div>
                   </EventProvider>
                 </ActivityLogCategoryProvider>

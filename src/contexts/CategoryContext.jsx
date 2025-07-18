@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
 import { useAuth } from './AuthContext';
+import useRealtime from '../hooks/useRealtime';
 
 const CategoryContext = createContext();
 
@@ -70,6 +71,38 @@ function categoryReducer(state, action) {
 export function CategoryProvider({ children }) {
   const [state, dispatch] = useReducer(categoryReducer, initialState);
   const { user } = useAuth();
+
+  // Real-time subscription for categories
+  useRealtime('categories', (payload) => {
+    console.log('Real-time category update:', payload);
+    
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new && !state.categories.find(c => c.id === payload.new.id)) {
+          dispatch({
+            type: 'ADD_CATEGORY',
+            payload: { id: payload.new.id, name: payload.new.name, color: payload.new.color }
+          });
+        }
+        break;
+      case 'UPDATE':
+        if (payload.new) {
+          dispatch({
+            type: 'UPDATE_CATEGORY',
+            payload: { id: payload.new.id, updates: payload.new }
+          });
+        }
+        break;
+      case 'DELETE':
+        if (payload.old) {
+          dispatch({
+            type: 'PERMANENTLY_DELETE_CATEGORY',
+            payload: payload.old.id
+          });
+        }
+        break;
+    }
+  }, [state.categories]);
 
   // Load categories from database on mount
   useEffect(() => {

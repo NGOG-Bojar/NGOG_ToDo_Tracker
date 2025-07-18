@@ -267,18 +267,36 @@ export function ProjectProvider({ children }) {
 
   // Real-time subscription for projects
   useRealtime('projects', (payload) => {
+    console.log('Real-time project update:', payload);
+    
     switch (payload.eventType) {
       case 'INSERT':
-        dispatch({ type: 'ADD_PROJECT', payload: payload.new });
+        if (payload.new && !state.projects.find(p => p.id === payload.new.id)) {
+          dispatch({ 
+            type: 'ADD_PROJECT', 
+            payload: { 
+              ...payload.new, 
+              id: payload.new.id,
+              activityLog: [] // Initialize empty activity log for real-time updates
+            } 
+          });
+        }
         break;
       case 'UPDATE':
-        dispatch({ type: 'UPDATE_PROJECT', payload: { id: payload.new.id, updates: payload.new } });
+        if (payload.new) {
+          dispatch({ 
+            type: 'UPDATE_PROJECT', 
+            payload: { id: payload.new.id, updates: payload.new } 
+          });
+        }
         break;
       case 'DELETE':
-        dispatch({ type: 'DELETE_PROJECT', payload: payload.old.id });
+        if (payload.old) {
+          dispatch({ type: 'DELETE_PROJECT', payload: payload.old.id });
+        }
         break;
     }
-  }, []);
+  }, [state.projects]);
 
   // Load projects from database
   const loadProjects = async () => {

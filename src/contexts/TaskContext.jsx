@@ -4,6 +4,7 @@ import { isToday, isPast, parseISO } from 'date-fns';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
 import { useAuth } from './AuthContext';
+import useRealtime from '../hooks/useRealtime';
 
 const TaskContext = createContext();
 
@@ -87,6 +88,38 @@ function taskReducer(state, action) {
 export function TaskProvider({ children }) {
   const [state, dispatch] = useReducer(taskReducer, initialState);
   const { user } = useAuth();
+
+  // Real-time subscription for tasks
+  useRealtime('tasks', (payload) => {
+    console.log('Real-time task update:', payload);
+    
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new && !state.tasks.find(t => t.id === payload.new.id)) {
+          dispatch({
+            type: 'ADD_TASK',
+            payload: { taskData: payload.new, id: payload.new.id }
+          });
+        }
+        break;
+      case 'UPDATE':
+        if (payload.new) {
+          dispatch({
+            type: 'UPDATE_TASK',
+            payload: { id: payload.new.id, ...payload.new }
+          });
+        }
+        break;
+      case 'DELETE':
+        if (payload.old) {
+          dispatch({
+            type: 'DELETE_TASK',
+            payload: payload.old.id
+          });
+        }
+        break;
+    }
+  }, [state.tasks]);
 
   // Load tasks from database on mount
   useEffect(() => {
