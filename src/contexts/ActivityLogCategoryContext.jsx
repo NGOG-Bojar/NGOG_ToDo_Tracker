@@ -1,18 +1,14 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { db } from '../services/database';
+import { syncService } from '../services/syncService';
+import { useAuth } from './AuthContext';
+import useRealtime from '../hooks/useRealtime';
 
 const ActivityLogCategoryContext = createContext();
 
 const initialState = {
-  activityLogCategories: [
-    // Default categories
-    { id: 'general', name: 'General', color: '#6B7280', predefined: true },
-    { id: 'milestone', name: 'Milestone', color: '#10B981', predefined: true },
-    { id: 'update', name: 'Update', color: '#3B82F6', predefined: true },
-    { id: 'issue', name: 'Issue', color: '#EF4444', predefined: true },
-    { id: 'meeting', name: 'Meeting', color: '#8B5CF6', predefined: true },
-    { id: 'decision', name: 'Decision', color: '#F59E0B', predefined: true }
-  ]
+  activityLogCategories: []
 };
 
 function activityLogCategoryReducer(state, action) {
@@ -25,11 +21,13 @@ function activityLogCategoryReducer(state, action) {
         activityLogCategories: [
           ...state.activityLogCategories,
           {
-            id: uuidv4(),
+            id: action.payload.id,
             name: action.payload.name,
             color: action.payload.color,
             predefined: false,
-            deleted: false
+            deleted: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           }
         ]
       };
@@ -74,38 +72,172 @@ function activityLogCategoryReducer(state, action) {
 
 export function ActivityLogCategoryProvider({ children }) {
   const [state, dispatch] = useReducer(activityLogCategoryReducer, initialState);
+  const { user } = useAuth();
 
-  // Load categories from localStorage on mount
-  useEffect(() => {
-    const savedCategories = localStorage.getItem('todoActivityLogCategories');
-    if (savedCategories) {
-      dispatch({ type: 'LOAD_ACTIVITY_LOG_CATEGORIES', payload: JSON.parse(savedCategories) });
+  // Real-time subscription for activity log categories
+  useRealtime('activity_log_categories', (payload) => {
+    console.log('Real-time activity log category update:', payload);
+    
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new && !state.activityLogCategories.find(c => c.id === payload.new.id)) {
+          dispatch({
+            type: 'ADD_ACTIVITY_LOG_CATEGORY',
+            payload: { id: payload.new.id, name: payload.new.name, color: payload.new.color }
+          });
+        }
+        break;
+      case 'UPDATE':
+        if (payload.new) {
+          dispatch({
+            type: 'UPDATE_ACTIVITY_LOG_CATEGORY',
+            payload: { id: payload.new.id, updates: payload.new }
+          });
+        }
+        break;
+      case 'DELETE':
+        if (payload.old) {
+          dispatch({
+            type: 'PERMANENTLY_DELETE_ACTIVITY_LOG_CATEGORY',
+            payload: payload.old.id
+          });
+        }
+        break;
     }
-  }, []);
-
-  // Save categories to localStorage whenever categories change
-  useEffect(() => {
-    localStorage.setItem('todoActivityLogCategories', JSON.stringify(state.activityLogCategories));
   }, [state.activityLogCategories]);
 
-  const addActivityLogCategory = (name, color) => {
-    dispatch({ type: 'ADD_ACTIVITY_LOG_CATEGORY', payload: { name, color } });
+  // Load categories from database on mount
+  useEffect(() => {
+    loadActivityLogCategories();
+  }, []);
+
+  // Listen for data refresh events
+  useEffect(() => {
+    const handleDataRefresh = () => {
+      loadActivityLogCategories();
+    };
+
+    window.addEventListener('dataRefresh', handleDataRefresh);
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, []);
+
+  // Load categories from database
+  const loadActivityLogCategories = async () => {
+    try {
+      const categories = await db.read('activity_log_categories');
+      dispatch({ type: 'LOAD_ACTIVITY_LOG_CATEGORIES', payload: categories });
+    } catch (error) {
+      console.error('Error loading activity log categories:', error);
+    }
   };
 
-  const updateActivityLogCategory = (id, updates) => {
-    dispatch({ type: 'UPDATE_ACTIVITY_LOG_CATEGORY', payload: { id, updates } });
+  const addActivityLogCategory = async (name, color) => {
+    try {
+      const newCategory = await db.create('activity_log_categories', {
+        name,
+        color,
+        predefined: false,
+        deleted: false
+      });
+      
+      dispatch({
+        type: 'ADD_ACTIVITY_LOG_CATEGORY',
+        payload: { id: newCategory.id, name, color }
+      });
+      
+      return newCategory;
+    } catch (error) {
+      console.error('Error adding activity log category:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'create',
+          table: 'activity_log_categories',
+          data: { name, color, predefined: false, deleted: false }
+        });
+      }
+      throw error;
+    }
   };
 
-  const deleteActivityLogCategory = (id) => {
-    dispatch({ type: 'DELETE_ACTIVITY_LOG_CATEGORY', payload: id });
+  const updateActivityLogCategory = async (id, updates) => {
+    try {
+      await db.update('activity_log_categories', id, updates);
+      dispatch({
+        type: 'UPDATE_ACTIVITY_LOG_CATEGORY',
+        payload: { id, updates }
+      });
+    } catch (error) {
+      console.error('Error updating activity log category:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'activity_log_categories',
+          id,
+          updates
+        });
+      }
+      throw error;
+    }
   };
 
-  const restoreActivityLogCategory = (id) => {
-    dispatch({ type: 'RESTORE_ACTIVITY_LOG_CATEGORY', payload: id });
+  const deleteActivityLogCategory = async (id) => {
+    try {
+      // Soft delete - mark as deleted instead of removing
+      await db.update('activity_log_categories', id, { 
+        deleted: true, 
+        deleted_at: new Date().toISOString() 
+      });
+      dispatch({ type: 'DELETE_ACTIVITY_LOG_CATEGORY', payload: id });
+    } catch (error) {
+      console.error('Error deleting activity log category:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'activity_log_categories',
+          id,
+          updates: { deleted: true, deleted_at: new Date().toISOString() }
+        });
+      }
+      throw error;
+    }
   };
 
-  const permanentlyDeleteActivityLogCategory = (id) => {
-    dispatch({ type: 'PERMANENTLY_DELETE_ACTIVITY_LOG_CATEGORY', payload: id });
+  const restoreActivityLogCategory = async (id) => {
+    try {
+      await db.update('activity_log_categories', id, { 
+        deleted: false, 
+        deleted_at: null 
+      });
+      dispatch({ type: 'RESTORE_ACTIVITY_LOG_CATEGORY', payload: id });
+    } catch (error) {
+      console.error('Error restoring activity log category:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'update',
+          table: 'activity_log_categories',
+          id,
+          updates: { deleted: false, deleted_at: null }
+        });
+      }
+      throw error;
+    }
+  };
+
+  const permanentlyDeleteActivityLogCategory = async (id) => {
+    try {
+      await db.delete('activity_log_categories', id);
+      dispatch({ type: 'PERMANENTLY_DELETE_ACTIVITY_LOG_CATEGORY', payload: id });
+    } catch (error) {
+      console.error('Error permanently deleting activity log category:', error);
+      if (!navigator.onLine) {
+        syncService.queueOperation({
+          type: 'delete',
+          table: 'activity_log_categories',
+          id
+        });
+      }
+      throw error;
+    }
   };
 
   const getActivityLogCategoryById = (id) => {

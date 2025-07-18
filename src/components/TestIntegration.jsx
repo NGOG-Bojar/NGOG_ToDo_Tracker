@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTask } from '../contexts/TaskContext';
 import { useCategory } from '../contexts/CategoryContext';
 import { useProject } from '../contexts/ProjectContext';
+import { useActivityLogCategory } from '../contexts/ActivityLogCategoryContext';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
 import { supabase } from '../lib/supabase';
@@ -24,6 +25,7 @@ function TestIntegration({ onClose }) {
   const { addTask } = useTask();
   const { addCategory } = useCategory();
   const { addProject } = useProject();
+  const { addActivityLogCategory } = useActivityLogCategory();
 
   const testSuite = [
     {
@@ -169,6 +171,18 @@ function TestIntegration({ onClose }) {
           throw new Error('Failed to create project');
         }
         return { projectId: testProject.id, title: testProject.title };
+      }
+    },
+    {
+      id: 'create-activity-category',
+      name: 'Create Activity Log Category',
+      description: 'Test creating a new activity log category',
+      test: async () => {
+        const testCategory = await addActivityLogCategory('Test Activity Category', '#FF5733');
+        if (!testCategory || !testCategory.id) {
+          throw new Error('Failed to create activity log category');
+        }
+        return { categoryId: testCategory.id, name: testCategory.name };
       }
     },
     {
