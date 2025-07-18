@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { v4 as uuidv4 } from 'uuid';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
@@ -602,7 +603,7 @@ function TestIntegration({ onClose }) {
         const testOperation = syncService.queueOperation({
           type: 'update',
           table: 'tasks',
-          id: 'test-id',
+          id: uuidv4(),
           updates: { title: 'Test Update' }
         });
         
