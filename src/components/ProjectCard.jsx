@@ -47,9 +47,9 @@ function ProjectCard({ project, onEdit, onDelete, onArchive, onViewDetails }) {
       <div className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <div 
-              className="w-4 h-4 rounded-full" 
-              style={{ backgroundColor: project.color || '#3B82F6' }} 
+            <div
+              className="w-4 h-4 rounded-full"
+              style={{ backgroundColor: project.color || '#3B82F6' }}
             />
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {project.title}
@@ -65,7 +65,6 @@ function ProjectCard({ project, onEdit, onDelete, onArchive, onViewDetails }) {
             >
               <SafeIcon icon={FiMoreVertical} className="text-sm" />
             </button>
-            
             {/* Dropdown Menu */}
             {showDropdown && (
               <motion.div
@@ -114,7 +113,6 @@ function ProjectCard({ project, onEdit, onDelete, onArchive, onViewDetails }) {
             )}
           </div>
         </div>
-
         {/* Status */}
         <div className="flex items-center space-x-2 mb-3">
           <span
@@ -125,34 +123,40 @@ function ProjectCard({ project, onEdit, onDelete, onArchive, onViewDetails }) {
             {getStatusLabel(project.status)}
           </span>
         </div>
-
         {/* Description */}
         {project.description && (
           <p className="text-sm text-gray-600 mb-4 line-clamp-2">
             {project.description}
           </p>
         )}
-
         {/* Stats */}
         <div className="flex items-center justify-between text-sm text-gray-500">
           <div className="flex items-center space-x-4">
             {project.participants && project.participants.length > 0 && (
               <div className="flex items-center space-x-1">
                 <SafeIcon icon={FiUsers} className="text-xs" />
-                <span>{project.participants.length} participant{project.participants.length > 1 ? 's' : ''}</span>
+                <span>
+                  {project.participants.length} participant
+                  {project.participants.length > 1 ? 's' : ''}
+                </span>
               </div>
             )}
             {project.linkedTasks && project.linkedTasks.length > 0 && (
               <div className="flex items-center space-x-1">
                 <SafeIcon icon={FiLink} className="text-xs" />
-                <span>{project.linkedTasks.length} linked task{project.linkedTasks.length > 1 ? 's' : ''}</span>
+                <span>
+                  {project.linkedTasks.length} linked task
+                  {project.linkedTasks.length > 1 ? 's' : ''}
+                </span>
               </div>
             )}
           </div>
           <div className="flex items-center space-x-1">
             <SafeIcon icon={FiCalendar} className="text-xs" />
             <span>
-              {format(parseISO(project.createdAt), 'MMM dd, yyyy')}
+              {project.created_at ? 
+                format(new Date(project.created_at), 'MMM dd, yyyy') : 
+                'No date'}
             </span>
           </div>
         </div>

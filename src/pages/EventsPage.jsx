@@ -6,12 +6,11 @@ import { useEvent } from '../contexts/EventContext';
 import EventCard from '../components/events/EventCard';
 import EventModal from '../components/events/EventModal';
 import EventDetailsModal from '../components/events/EventDetailsModal';
+import LoadingSpinner from '../components/LoadingSpinner';
+import ErrorMessage from '../components/ErrorMessage';
 import { format, isAfter, isBefore, isWithinInterval } from 'date-fns';
 
-const { 
-  FiPlus, FiCalendar, FiSearch, FiFilter, FiClock, FiCheckSquare, 
-  FiMapPin, FiUser, FiUsers, FiMic, FiPackage, FiGrid, FiList 
-} = FiIcons;
+const { FiPlus, FiCalendar, FiSearch, FiFilter, FiClock, FiCheckSquare, FiMapPin, FiUser, FiUsers, FiMic, FiPackage, FiGrid, FiList } = FiIcons;
 
 function EventsPage() {
   const [showEventModal, setShowEventModal] = useState(false);
@@ -22,6 +21,8 @@ function EventsPage() {
 
   const {
     events,
+    isLoading,
+    error,
     addEvent,
     updateEvent,
     deleteEvent,
@@ -34,43 +35,44 @@ function EventsPage() {
     setSort,
     sortBy,
     sortOrder,
-    PARTICIPATION_TYPES
+    PARTICIPATION_TYPES,
+    clearError
   } = useEvent();
 
   const filteredEvents = getFilteredEvents();
-  
+
   // Get current date
   const today = new Date();
-  
+
   // Stats calculation
   const stats = {
     total: events.length,
     upcoming: events.filter(event => isAfter(new Date(event.startDate), today)).length,
     ongoing: events.filter(event => 
-      isWithinInterval(today, {
-        start: new Date(event.startDate),
-        end: new Date(event.endDate)
+      isWithinInterval(today, { 
+        start: new Date(event.startDate), 
+        end: new Date(event.endDate) 
       })
     ).length,
     past: events.filter(event => isBefore(new Date(event.endDate), today)).length,
   };
 
-  const handleCreateEvent = (eventData) => {
-    addEvent(eventData);
+  const handleCreateEvent = async (eventData) => {
+    await addEvent(eventData);
     setShowEventModal(false);
   };
 
-  const handleUpdateEvent = (id, updates) => {
-    updateEvent(id, updates);
+  const handleUpdateEvent = async (id, updates) => {
+    await updateEvent(id, updates);
     setEditingEvent(null);
     setShowEventModal(false);
     setShowDetailsModal(false);
   };
 
-  const handleDeleteEvent = (id) => {
+  const handleDeleteEvent = async (id) => {
     const event = events.find(e => e.id === id);
     if (window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
-      deleteEvent(id);
+      await deleteEvent(id);
       if (showDetailsModal && selectedEvent?.id === id) {
         setShowDetailsModal(false);
         setSelectedEvent(null);
@@ -113,6 +115,14 @@ function EventsPage() {
     { value: 'past', label: 'Past', icon: FiCalendar }
   ];
 
+  if (isLoading && events.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner size="xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -132,6 +142,15 @@ function EventsPage() {
           <span>New Event</span>
         </button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <ErrorMessage
+          error={error}
+          onDismiss={clearError}
+          onRetry={() => window.location.reload()}
+        />
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -252,12 +271,12 @@ function EventsPage() {
           {/* Sort Options */}
           <div className="flex gap-2">
             <button
-              onClick={() => handleSortChange('startDate')}
+              onClick={() => handleSortChange('start_date')}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                sortBy === 'startDate' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                sortBy === 'start_date' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              Date {sortBy === 'startDate' && (sortOrder === 'asc' ? '↑' : '↓')}
+              Date {sortBy === 'start_date' && (sortOrder === 'asc' ? '↑' : '↓')}
             </button>
             <button
               onClick={() => handleSortChange('title')}
@@ -295,176 +314,41 @@ function EventsPage() {
         </div>
       </div>
 
-      {/* Events List/Grid */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AnimatePresence>
-            {filteredEvents.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="col-span-full text-center py-12"
-              >
-                <SafeIcon icon={FiCalendar} className="text-gray-300 text-6xl mx-auto mb-4" />
-                <p className="text-gray-500 text-lg">No events found</p>
-                <p className="text-gray-400 text-sm mt-2">
-                  Create your first event or adjust your filters
-                </p>
-              </motion.div>
-            ) : (
-              filteredEvents.map(event => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onEdit={handleEditEvent}
-                  onDelete={handleDeleteEvent}
-                  onViewDetails={handleViewDetails}
-                />
-              ))
-            )}
-          </AnimatePresence>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Event
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dates
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Progress
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredEvents.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center">
-                    <p className="text-gray-500">No events found</p>
-                    <p className="text-gray-400 text-sm mt-2">
-                      Create your first event or adjust your filters
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredEvents.map(event => {
-                  // Calculate progress
-                  const completedItems = event.checklist.filter(item => item.completed).length;
-                  const progress = Math.round((completedItems / event.checklist.length) * 100);
-                  
-                  // Determine event status
-                  const startDate = new Date(event.startDate);
-                  const endDate = new Date(event.endDate);
-                  let status = 'upcoming';
-                  
-                  if (isWithinInterval(today, { start: startDate, end: endDate })) {
-                    status = 'ongoing';
-                  } else if (isBefore(endDate, today)) {
-                    status = 'past';
-                  }
-                  
-                  return (
-                    <tr 
-                      key={event.id}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => handleViewDetails(event)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="ml-4">
-                            <div className="font-medium text-gray-900">{event.title}</div>
-                            {event.participationType === PARTICIPATION_TYPES.SPEAKER || 
-                             event.participationType === PARTICIPATION_TYPES.BOTH ? (
-                              <div className="text-xs text-gray-500">
-                                <span className="text-blue-600">Talk:</span> {event.talkTitle || 'N/A'}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <SafeIcon icon={FiMapPin} className="text-gray-400 mr-1 text-xs" />
-                          <span className="text-gray-500">{event.location || 'N/A'}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {format(new Date(event.startDate), 'MMM d, yyyy')}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          to {format(new Date(event.endDate), 'MMM d, yyyy')}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          event.participationType === PARTICIPATION_TYPES.EXHIBITOR
-                            ? 'bg-blue-100 text-blue-800'
-                            : event.participationType === PARTICIPATION_TYPES.SPEAKER
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-purple-100 text-purple-800'
-                        }`}>
-                          {event.participationType === PARTICIPATION_TYPES.EXHIBITOR
-                            ? 'Exhibitor'
-                            : event.participationType === PARTICIPATION_TYPES.SPEAKER
-                            ? 'Speaker'
-                            : 'Exhibitor & Speaker'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div 
-                            className={`h-2.5 rounded-full ${
-                              progress > 75 ? 'bg-green-600' : 
-                              progress > 50 ? 'bg-blue-600' : 
-                              progress > 25 ? 'bg-yellow-500' : 'bg-red-600'
-                            }`}
-                            style={{ width: `${progress}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1 text-right">{progress}%</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditEvent(event);
-                          }}
-                          className="text-blue-600 hover:text-blue-900 mr-4"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteEvent(event.id);
-                          }}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+      {/* Loading Spinner */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <LoadingSpinner size="lg" />
         </div>
       )}
+
+      {/* Events Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <AnimatePresence>
+          {filteredEvents.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="col-span-full text-center py-12"
+            >
+              <SafeIcon icon={FiCalendar} className="text-gray-300 text-6xl mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No events found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                Create your first event or adjust your filters
+              </p>
+            </motion.div>
+          ) : (
+            filteredEvents.map(event => (
+              <EventCard
+                key={event.id}
+                event={event}
+                onEdit={handleEditEvent}
+                onDelete={handleDeleteEvent}
+                onViewDetails={handleViewDetails}
+              />
+            ))
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Event Creation/Edit Modal */}
       {showEventModal && (
