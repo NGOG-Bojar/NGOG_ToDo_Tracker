@@ -8,6 +8,7 @@ import { useCategory } from '../contexts/CategoryContext';
 import { useProject } from '../contexts/ProjectContext';
 import { db } from '../services/database';
 import { syncService } from '../services/syncService';
+import { supabase } from '../lib/supabase';
 
 const { 
   FiCheck, FiX, FiLoader, FiDatabase, FiWifi, FiWifiOff, 
@@ -42,13 +43,57 @@ function TestIntegration({ onClose }) {
       name: 'Database Connection',
       description: 'Test connection to Supabase',
       test: async () => {
-        const isAuth = await db.isAuthenticated();
-        const currentUser = await db.getCurrentUser();
-        return { 
-          authenticated: isAuth, 
-          userEmail: currentUser?.email,
-          online: navigator.onLine 
-        };
+        try {
+          console.log('Testing read operations...');
+          console.log('Testing project creation...');
+          console.log('Testing task creation...');
+          console.log('Testing category creation...');
+          console.log('Testing database connection...');
+          
+          // Test basic Supabase connection
+          const { data, error } = await supabase.from('categories').select('count').limit(1);
+          console.log('Supabase query result:', { data, error });
+          
+          console.log('Category created:', testCategory);
+          console.log('Task created:', testTask);
+          console.log('Project created:', testProject);
+          if (error) {
+            throw new Error(`Supabase connection failed: ${error.message}`);
+          }
+          
+          const isAuth = await db.isAuthenticated();
+          console.log('Authentication check:', isAuth);
+          
+          const currentUser = await db.getCurrentUser();
+          console.log('Current user:', currentUser?.email);
+          
+          console.log('Tasks data:', tasksData);
+          return { 
+          console.log('Categories data:', categoriesData);
+            supabaseConnected: !error,
+          console.log('Projects data:', projectsData);
+            authenticated: isAuth, 
+            userEmail: currentUser?.email,
+            online: navigator.onLine,
+            hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+            hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
+          };
+        } catch (error) {
+          console.error('Read operations test error:', error);
+          throw error;
+        } catch (error) {
+          console.error('Database connection test error:', error);
+          throw error;
+        } catch (error) {
+          console.error('Category creation test error:', error);
+          throw error;
+        } catch (error) {
+          console.error('Task creation test error:', error);
+          throw error;
+        } catch (error) {
+          console.error('Project creation test error:', error);
+          throw error;
+        }
       }
     },
     {
@@ -154,17 +199,29 @@ function TestIntegration({ onClose }) {
     setIsRunning(true);
     setResults({});
     setCurrentTest(null);
+    
+    console.log('Starting test suite...');
+    console.log('Environment check:', {
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Missing',
+      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing',
+      userAuthenticated: !!user,
+      userEmail: user?.email,
+      online: navigator.onLine
+    });
 
     for (const test of testSuite) {
+      console.log(`Running test: ${test.name}`);
       setCurrentTest(test.id);
       
       try {
         const result = await test.test();
+        console.log(`Test ${test.name} passed:`, result);
         setResults(prev => ({
           ...prev,
           [test.id]: { status: 'success', result, error: null }
         }));
       } catch (error) {
+        console.error(`Test ${test.name} failed:`, error);
         setResults(prev => ({
           ...prev,
           [test.id]: { status: 'error', result: null, error: error.message }
@@ -177,6 +234,7 @@ function TestIntegration({ onClose }) {
     
     setCurrentTest(null);
     setIsRunning(false);
+    console.log('Test suite completed');
   };
 
   const getTestStatus = (testId) => {
