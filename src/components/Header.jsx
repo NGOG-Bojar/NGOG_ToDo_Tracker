@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import LogoutButton from './LogoutButton';
@@ -18,9 +19,10 @@ const {
   FiChevronUp
 } = FiIcons;
 
-function Header({ onLogout }) {
+function Header() {
   const location = useLocation();
   const [showTasksSubmenu, setShowTasksSubmenu] = useState(false);
+  const { user } = useAuth();
 
   const navItems = [
     { path: '/', icon: FiHome, label: 'Dashboard' },
@@ -117,9 +119,11 @@ function Header({ onLogout }) {
               </div>
             ))}
             {/* Logout Button */}
-            <div className="ml-3 pl-3 border-l border-gray-200">
-              <LogoutButton onLogout={onLogout} />
-            </div>
+            {user && (
+              <div className="ml-3 pl-3 border-l border-gray-200">
+                <LogoutButton />
+              </div>
+            )}
           </nav>
         </div>
       </div>

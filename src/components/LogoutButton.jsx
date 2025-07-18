@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
+import { useAuth } from '../contexts/AuthContext';
 import * as FiIcons from 'react-icons/fi';
 
 const { FiLogOut, FiAlertTriangle } = FiIcons;
 
 function LogoutButton({ onLogout }) {
   const [showConfirm, setShowConfirm] = useState(false);
+  const { signOut, user } = useAuth();
 
-  const handleLogout = () => {
-    // Clear authentication
-    sessionStorage.removeItem('todoAppAuthenticated');
-    // Clear URL parameters
-    window.history.replaceState({}, document.title, window.location.pathname);
-    onLogout();
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const handleConfirm = () => {
@@ -23,7 +25,13 @@ function LogoutButton({ onLogout }) {
 
   return (
     <>
-      <button
+      <div className="flex items-center space-x-3">
+        {user?.email && (
+          <span className="text-sm text-gray-600 hidden sm:block">
+            {user.email}
+          </span>
+        )}
+        <button
         onClick={() => setShowConfirm(true)}
         className="flex items-center space-x-2 px-3 py-2 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
         title="Logout"
@@ -31,6 +39,7 @@ function LogoutButton({ onLogout }) {
         <SafeIcon icon={FiLogOut} className="text-sm" />
         <span>Logout</span>
       </button>
+      </div>
 
       {/* Confirmation Modal */}
       <AnimatePresence>
@@ -56,7 +65,7 @@ function LogoutButton({ onLogout }) {
                 </div>
                 
                 <p className="text-gray-600 mb-6">
-                  Are you sure you want to logout? You'll need to enter the password again to access the application.
+                  Are you sure you want to logout? You'll need to sign in again to access your synced data.
                 </p>
                 
                 <div className="flex space-x-3">
