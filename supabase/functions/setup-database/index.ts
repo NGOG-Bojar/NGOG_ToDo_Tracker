@@ -39,268 +39,8 @@ serve(async (req) => {
       )
     }
 
-    // Complete database schema SQL
-    const schemaSql = `
--- Enable necessary extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Create categories table
-CREATE TABLE IF NOT EXISTS categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  color TEXT NOT NULL,
-  predefined BOOLEAN DEFAULT false,
-  deleted BOOLEAN DEFAULT false,
-  deleted_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  local_id TEXT
-);
-
--- Create tasks table
-CREATE TABLE IF NOT EXISTS tasks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT,
-  due_date TIMESTAMPTZ,
-  priority TEXT CHECK (priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
-  status TEXT CHECK (status IN ('open', 'completed')) DEFAULT 'open',
-  categories UUID[] DEFAULT '{}',
-  notes TEXT,
-  checklist JSONB DEFAULT '[]',
-  linked_project UUID,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  deleted_at TIMESTAMPTZ,
-  local_id TEXT
-);
-
--- Create projects table
-CREATE TABLE IF NOT EXISTS projects (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT CHECK (status IN ('idea', 'preparation', 'active', 'waiting', 'completed', 'on_hold')) DEFAULT 'idea',
-  color TEXT DEFAULT '#3B82F6',
-  participants JSONB DEFAULT '[]',
-  linked_tasks UUID[] DEFAULT '{}',
-  archived BOOLEAN DEFAULT false,
-  archived_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  local_id TEXT
-);
-
--- Add foreign key constraint for linked_project after projects table exists
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'tasks_linked_project_fkey'
-  ) THEN
-    ALTER TABLE tasks ADD CONSTRAINT tasks_linked_project_fkey 
-    FOREIGN KEY (linked_project) REFERENCES projects(id) ON DELETE SET NULL;
-  END IF;
-END $$;
-
--- Create project_activity_logs table
-CREATE TABLE IF NOT EXISTS project_activity_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-  type TEXT NOT NULL,
-  message TEXT NOT NULL,
-  auto BOOLEAN DEFAULT false,
-  category TEXT DEFAULT 'general',
-  timestamp TIMESTAMPTZ DEFAULT now(),
-  local_id TEXT
-);
-
--- Create activity_log_categories table
-CREATE TABLE IF NOT EXISTS activity_log_categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  color TEXT NOT NULL,
-  predefined BOOLEAN DEFAULT false,
-  deleted BOOLEAN DEFAULT false,
-  deleted_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  local_id TEXT
-);
-
--- Create events table
-CREATE TABLE IF NOT EXISTS events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  location TEXT,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  participation_type TEXT CHECK (participation_type IN ('exhibitor', 'speaker', 'exhibitor_speaker')) DEFAULT 'exhibitor',
-  talk_title TEXT,
-  talk_date DATE,
-  talk_time TIME,
-  participants JSONB DEFAULT '[]',
-  checklist JSONB DEFAULT '[]',
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  local_id TEXT
-);
-
--- Create user_settings table
-CREATE TABLE IF NOT EXISTS user_settings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
-  theme TEXT DEFAULT 'default',
-  notifications BOOLEAN DEFAULT true,
-  password_hash TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Enable Row Level Security
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE project_activity_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE activity_log_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
-
--- Create RLS Policies
--- Categories policies
-DROP POLICY IF EXISTS "Users can manage their own categories" ON categories;
-CREATE POLICY "Users can manage their own categories" ON categories
-  FOR ALL USING (auth.uid() = user_id);
-
--- Tasks policies
-DROP POLICY IF EXISTS "Users can manage their own tasks" ON tasks;
-CREATE POLICY "Users can manage their own tasks" ON tasks
-  FOR ALL USING (auth.uid() = user_id);
-
--- Projects policies
-DROP POLICY IF EXISTS "Users can manage their own projects" ON projects;
-CREATE POLICY "Users can manage their own projects" ON projects
-  FOR ALL USING (auth.uid() = user_id);
-
--- Project activity logs policies
-DROP POLICY IF EXISTS "Users can manage activity logs for their projects" ON project_activity_logs;
-CREATE POLICY "Users can manage activity logs for their projects" ON project_activity_logs
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM projects 
-      WHERE projects.id = project_activity_logs.project_id 
-      AND projects.user_id = auth.uid()
-    )
-  );
-
--- Activity log categories policies
-DROP POLICY IF EXISTS "Users can manage their own activity log categories" ON activity_log_categories;
-CREATE POLICY "Users can manage their own activity log categories" ON activity_log_categories
-  FOR ALL USING (auth.uid() = user_id);
-
--- Events policies
-DROP POLICY IF EXISTS "Users can manage their own events" ON events;
-CREATE POLICY "Users can manage their own events" ON events
-  FOR ALL USING (auth.uid() = user_id);
-
--- User settings policies
-DROP POLICY IF EXISTS "Users can manage their own settings" ON user_settings;
-CREATE POLICY "Users can manage their own settings" ON user_settings
-  FOR ALL USING (auth.uid() = user_id);
-
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
-CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(user_id, deleted);
-CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(user_id, name);
-
-CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(user_id, priority);
-CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(user_id, due_date);
-CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_tasks_categories ON tasks USING gin(categories);
-CREATE INDEX IF NOT EXISTS idx_tasks_linked_project ON tasks(linked_project);
-CREATE INDEX IF NOT EXISTS idx_tasks_search ON tasks USING gin(to_tsvector('english', title || ' ' || COALESCE(description, '')));
-
-CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
-CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(user_id, archived);
-CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_projects_linked_tasks ON projects USING gin(linked_tasks);
-CREATE INDEX IF NOT EXISTS idx_projects_search ON projects USING gin(to_tsvector('english', title || ' ' || COALESCE(description, '')));
-
-CREATE INDEX IF NOT EXISTS idx_project_activity_logs_project_id ON project_activity_logs(project_id);
-CREATE INDEX IF NOT EXISTS idx_project_activity_logs_timestamp ON project_activity_logs(project_id, timestamp);
-
-CREATE INDEX IF NOT EXISTS idx_activity_log_categories_user_id ON activity_log_categories(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_log_categories_deleted ON activity_log_categories(user_id, deleted);
-
-CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
-CREATE INDEX IF NOT EXISTS idx_events_dates ON events(user_id, start_date, end_date);
-CREATE INDEX IF NOT EXISTS idx_events_participation_type ON events(user_id, participation_type);
-CREATE INDEX IF NOT EXISTS idx_events_search ON events USING gin(to_tsvector('english', title || ' ' || COALESCE(location, '') || ' ' || COALESCE(talk_title, '')));
-
-CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
-
--- Create updated_at trigger function
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Create triggers for updated_at
-DROP TRIGGER IF EXISTS update_categories_updated_at ON categories;
-CREATE TRIGGER update_categories_updated_at BEFORE UPDATE ON categories
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
-CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_projects_updated_at ON projects;
-CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_activity_log_categories_updated_at ON activity_log_categories;
-CREATE TRIGGER update_activity_log_categories_updated_at BEFORE UPDATE ON activity_log_categories
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_events_updated_at ON events;
-CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_user_settings_updated_at ON user_settings;
-CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-`;
-
-    // Execute the schema creation
-    const { error: schemaError } = await supabaseAdmin.rpc('exec_sql', { sql: schemaSql })
-    
-    if (schemaError) {
-      console.error('Schema creation error:', schemaError)
-      // Continue anyway - tables might already exist
-    }
-
-    // Now initialize user data
-    const { error: initError } = await supabaseAdmin.rpc('initialize_user_data', {
-      user_id: user.id
-    })
-
-    if (initError) {
-      console.error('User initialization error:', initError)
-      
-      // If the function doesn't exist, create it and try again
-      const createFunctionSql = `
+    // Create the initialize_user_data function if it doesn't exist
+    const createFunctionSql = `
 CREATE OR REPLACE FUNCTION initialize_user_data(user_id UUID)
 RETURNS void AS $$
 BEGIN
@@ -330,39 +70,35 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 `;
 
-      const { error: functionError } = await supabaseAdmin.rpc('exec_sql', { sql: createFunctionSql })
-      
-      if (functionError) {
-        console.error('Function creation error:', functionError)
-        return new Response(
-          JSON.stringify({ error: 'Failed to create initialization function', details: functionError }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+    // Create the function
+    const { error: functionError } = await supabaseAdmin.rpc('exec_sql', { sql: createFunctionSql })
+    
+    if (functionError) {
+      console.error('Function creation error:', functionError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to create initialization function', details: functionError }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
-      // Try initialization again
-      const { error: retryError } = await supabaseAdmin.rpc('initialize_user_data', {
-        user_id: user.id
-      })
+    // Initialize user data
+    const { error: initError } = await supabaseAdmin.rpc('initialize_user_data', {
+      user_id: user.id
+    })
 
-      if (retryError) {
-        console.error('Retry initialization error:', retryError)
-        return new Response(
-          JSON.stringify({ error: 'Failed to initialize user data', details: retryError }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+    if (initError) {
+      console.error('User initialization error:', initError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to initialize user data', details: initError }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Database setup and user initialization completed successfully!',
+        message: 'User initialization completed successfully!',
         user_id: user.id,
-        tables_created: [
-          'categories', 'tasks', 'projects', 'project_activity_logs', 
-          'activity_log_categories', 'events', 'user_settings'
-        ],
         default_data_created: {
           categories: 4,
           activity_log_categories: 6,
