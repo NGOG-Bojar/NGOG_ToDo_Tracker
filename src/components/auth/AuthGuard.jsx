@@ -3,19 +3,30 @@ import { useAuth } from '../../contexts/AuthContext'
 import AuthModal from './AuthModal'
 import LoadingSpinner from './LoadingSpinner'
 import OfflineMode from './OfflineMode'
+import DatabaseSetup from '../DatabaseSetup'
 
 export default function AuthGuard({ children }) {
   const { user, loading, session } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [useOfflineMode, setUseOfflineMode] = useState(false)
+  const [needsDatabaseSetup, setNeedsDatabaseSetup] = useState(false)
+  const [checkingDatabase, setCheckingDatabase] = useState(false)
 
   // Show loading spinner while checking authentication
   if (loading) {
     return <LoadingSpinner />
   }
 
-  // If user is authenticated and session is valid, show the app
+  // If user is authenticated and session is valid, check database setup
   if (user && session) {
+    // Check if database is set up (you can implement this check)
+    if (needsDatabaseSetup) {
+      return (
+        <DatabaseSetup 
+          onComplete={() => setNeedsDatabaseSetup(false)} 
+        />
+      )
+    }
     return children
   }
 
